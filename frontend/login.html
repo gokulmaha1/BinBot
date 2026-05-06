@@ -85,6 +85,7 @@
             });
 
             if (response.ok) {
+                localStorage.setItem('binbot_logged_in', 'true');
                 window.location.href = '/dashboard/index.html';
             } else {
                 document.getElementById('errorMsg').style.display = 'block';

@@ -194,6 +194,11 @@
     </div>
 
     <script>
+        // CLIENT-SIDE GUARD: Instant Auth Validation
+        if (localStorage.getItem('binbot_logged_in') !== 'true') {
+            window.location.href = '/dashboard/login.html';
+        }
+
         let isRunning = false;
         let priceData = [];
         const maxPoints = 100;
@@ -354,6 +359,7 @@
         };
 
         async function logout() {
+            localStorage.removeItem('binbot_logged_in');
             await fetch('/api/logout');
             window.location.href = '/dashboard/login.html';
         }
@@ -362,6 +368,7 @@
             try {
                 const response = await fetch('/api/stats');
                 if (response.status === 401) {
+                    localStorage.removeItem('binbot_logged_in');
                     window.location.href = '/dashboard/login.html';
                     return;
                 }
