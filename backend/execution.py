@@ -63,8 +63,11 @@ class ExecutionEngine:
     def round_price(self, symbol, price):
         tick_size, precision = self.get_price_info(symbol)
         if tick_size == 0: return round(price, 2)
-        # Calculate exactly how many "ticks" fit into the price
         return round(round(float(price) / tick_size) * tick_size, precision)
+
+    def place_limit_order(self, symbol, side, qty, price):
+        try:
+            rounded_price = self.round_price(symbol, price)
             order = self.client.futures_create_order(
                 symbol=symbol,
                 side=side,
