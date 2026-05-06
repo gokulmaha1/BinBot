@@ -590,20 +590,17 @@ async def bot_loop():
                                 log(f"ATOMIC STRIKE FAILED: {error}", "error")
                                 continue
 
-
-                                # 4. Save to Database
-                                db = SessionLocal()
-                                entry_fee = curr_price * qty * 0.0005
-                                new_trade = Trade(
-                                    symbol=symbol, side=signal, leverage=active_leverage,
-                                    entry_price=curr_price, quantity=qty, fee=entry_fee, status="OPEN"
-                                )
-                                db.add(new_trade)
-                                db.commit()
-                                db.close()
-                                break 
-                            else:
-                                log(f"Order Error: {error}", "error")
+                            # 3. Save to Database
+                            db = SessionLocal()
+                            entry_fee = curr_price * qty * 0.0005
+                            new_trade = Trade(
+                                symbol=symbol, side=signal, leverage=active_leverage,
+                                entry_price=curr_price, quantity=qty, fee=entry_fee, status="OPEN"
+                            )
+                            db.add(new_trade)
+                            db.commit()
+                            db.close()
+                            break 
  # Exit symbol loop
                 except Exception as e:
                     if "NameResolutionError" in str(e) or "HTTPSConnectionPool" in str(e):
