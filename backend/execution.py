@@ -123,6 +123,51 @@ class ExecutionEngine:
             print(f"[EXECUTION] TP/SL Error for {symbol}: {e}")
             return False
 
+    def place_atomic_trade(self, symbol, side, qty, curr_price, tp_pct, sl_pct):
+        try:
+            exit_side = SIDE_SELL if side == SIDE_BUY else SIDE_BUY
+            
+            # 1. Round Prices
+            if side == SIDE_BUY:
+                tp_price = self.round_price(symbol, curr_price * (1 + tp_pct))
+                sl_price = self.round_price(symbol, curr_price * (1 - sl_pct))
+            else:
+                tp_price = self.round_price(symbol, curr_price * (1 - tp_pct))
+                sl_price = self.round_price(symbol, curr_price * (1 + sl_pct))
+
+            # 2. Construct Batch
+            batch = [
+                {
+                    'symbol': symbol,
+                    'side': side,
+                    'type': 'MARKET',
+                    'quantity': str(qty)
+                },
+                {
+                    'symbol': symbol,
+                    'side': exit_side,
+                    'type': 'TAKE_PROFIT_MARKET',
+                    'stopPrice': str(tp_price),
+                    'closePosition': 'true',
+                    'workingType': 'MARK_PRICE'
+                },
+                {
+                    'symbol': symbol,
+                    'side': exit_side,
+                    'type': 'STOP_MARKET',
+                    'stopPrice': str(sl_price),
+                    'closePosition': 'true',
+                    'workingType': 'MARK_PRICE'
+                }
+            ]
+            
+            print(f"[EXECUTION] Firing ATOMIC BATCH for {symbol}...")
+            results = self.client.futures_place_batch_order(batchOrders=batch)
+            return results, None
+        except Exception as e:
+            print(f"[EXECUTION] Atomic Error: {e}")
+            return None, str(e)
+
     def verify_sl_active(self, symbol):
         try:
             open_orders = self.client.futures_get_open_orders(symbol=symbol)

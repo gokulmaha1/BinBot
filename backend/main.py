@@ -578,23 +578,17 @@ async def bot_loop():
                                 log(f"Execution Failed: Calculated Qty is 0. Check Balance!", "error")
                                 continue
 
-                            # 2. Execute Market Order
-                            order, error = executor.place_market_order(symbol, signal, qty)
+                            # 2. Execute ATOMIC BATCH (Entry + TP + SL in one shot)
+                            results, error = executor.place_atomic_trade(
+                                symbol, signal, qty, curr_price, cfg.take_profit, cfg.stop_loss
+                            )
                             
-                            if order:
-                                log(f"TRADE EXECUTED: {signal} {qty} {symbol} at Market", "warning")
-                                
-                                # 3. Set TP/SL
-                                success = executor.set_tp_sl(symbol, signal, curr_price, cfg.take_profit, cfg.stop_loss)
-                                if success:
-                                    # Calculate Net Estimates
-                                    est_profit = target_value * cfg.take_profit
-                                    est_fee = target_value * 0.001 # 0.1% roundtrip
-                                    net_profit = est_profit - est_fee
-                                    log(f"SHIELD ACTIVE: TP {cfg.take_profit*100}% | SL: {cfg.stop_loss*100}%", "info")
-                                    log(f"FEE CHECK: Est. Profit: ${net_profit:.2f} (After ${est_fee:.2f} fees)", "info")
-                                else:
-                                    log(f"Warning: TP/SL Order failed to place!", "error")
+                            if results and len(results) > 0 and 'orderId' in results[0]:
+                                log(f"ATOMIC STRIKE SUCCESS: {signal} {qty} {symbol} entered with Shield active.", "success")
+                                log(f"SHIELD ACTIVE: TP {cfg.take_profit*100}% | SL: {cfg.stop_loss*100}%", "info")
+                            else:
+                                log(f"ATOMIC STRIKE FAILED: {error}", "error")
+                                continue
 
 
                                 # 4. Save to Database
