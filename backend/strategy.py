@@ -55,40 +55,38 @@ class HybridStrategy:
         last_1m = df_1m.iloc[-1]
         last_5m = df_5m.iloc[-1]
         
-        # 2. HOLISTIC TREND ANALYSIS
+        # 2. HOLISTIC TREND ANALYSIS (Alignment Required)
         macro_trend = "UP" if last_5m['close'] > last_5m['ema50'] else "DOWN"
-        micro_trend = "UP" if last_1m['ema9'] > last_1m['ema21'] else "DOWN"
+        micro_trend = "UP" if last_1m['close'] > last_1m['ema21'] else "DOWN"
+        adx_strong = last_1m['adx'] > 25 # Only trade if there's a real trend
         
         # 3. VOLUME & 30S MOMENTUM FILTERS
-        vol_confirm = vol_spike > 1.4 # High Volume Surge
-        mom_confirm = abs(mom_30s) > 0.0008 # Significant 30s push
+        vol_confirm = vol_spike > 1.8 # Higher threshold for surge
+        mom_confirm = abs(mom_30s) > 0.0012 # Stronger 30s push
             
         rule_signal = None
         
-        # --- AGGRESSIVE UPTREND (5m: UP) ---
-        if macro_trend == "UP":
-            if last_1m['rsi'] < 40 or (micro_trend == "UP" and 50 < last_1m['rsi'] < 75):
-                # Triple-Lock Check
-                if vol_confirm or mom_confirm or velocity > 0.001:
+        # --- SELECTIVE UPTREND (Both 1m & 5m must be UP) ---
+        if macro_trend == "UP" and micro_trend == "UP" and adx_strong:
+            # Entry: Deep Pullback (RSI < 30) OR Momentum Breakout (RSI > 60)
+            if last_1m['rsi'] < 30 or (last_1m['rsi'] > 60 and mom_confirm):
+                if vol_confirm or mom_confirm:
                     rule_signal = "BUY"
 
-        # --- AGGRESSIVE DOWNTREND (5m: DOWN) ---
-        elif macro_trend == "DOWN":
-            if last_1m['rsi'] > 60 or (micro_trend == "DOWN" and 25 < last_1m['rsi'] < 50):
-                # Triple-Lock Check
-                if vol_confirm or mom_confirm or velocity < -0.001:
+        # --- SELECTIVE DOWNTREND (Both 1m & 5m must be DOWN) ---
+        elif macro_trend == "DOWN" and micro_trend == "DOWN" and adx_strong:
+            # Entry: Overbought Bounce (RSI > 70) OR Momentum Breakdown (RSI < 40)
+            if last_1m['rsi'] > 70 or (last_1m['rsi'] < 40 and mom_confirm):
+                if vol_confirm or mom_confirm:
                     rule_signal = "SELL"
             
-        else:
-            # Sideways: Need even stronger volume/momentum
-            if last_1m['rsi'] < 30 and (vol_spike > 2.0 or mom_30s > 0.001): rule_signal = "BUY"
-            elif last_1m['rsi'] > 70 and (vol_spike > 2.0 or mom_30s < -0.001): rule_signal = "SELL"
-
-        # 4. Final Confidence
+        # 4. Final Confidence Calculation
         ai_conf = 0.5
         if rule_signal == "BUY":
-            ai_conf = 0.7 + (0.1 if vol_confirm else 0) + (0.1 if mom_confirm else 0)
-        if rule_signal == "SELL":
-            ai_conf = 0.3 - (0.1 if vol_confirm else 0) - (0.1 if mom_confirm else 0)
+            ai_conf = 0.75 + (0.1 if vol_confirm else 0) + (0.1 if last_1m['adx'] > 35 else 0)
+        elif rule_signal == "SELL":
+            ai_conf = 0.25 - (0.1 if vol_confirm else 0) - (0.1 if last_1m['adx'] > 35 else 0)
+                
+        return rule_signal, ai_conf
                 
         return rule_signal, ai_conf
