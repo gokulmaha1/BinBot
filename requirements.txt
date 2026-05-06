@@ -18,6 +18,11 @@ xgboost==2.0.2
 scipy==1.11.4
 networkx==3.2.1
 
+# Messaging & Notifications
+aiogram==3.2.0
+magic-filter==1.0.12
+aiofiles==23.2.1
+
 # Utilities
 pydantic==2.5.2
 pydantic-settings==2.1.0
