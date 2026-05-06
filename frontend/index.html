@@ -116,6 +116,7 @@
         <div style="display: flex; align-items: center; gap: 1rem;">
             <div id="botStatus">Bot Idle</div>
             <button id="toggleBtn" class="btn btn-start">Start Bot</button>
+            <button onclick="logout()" class="btn" style="background: transparent; color: #94a3b8; font-size: 0.8rem;">Logout</button>
         </div>
     </nav>
 
@@ -351,6 +352,30 @@
             alert('Reset Successful!');
             updateData();
         };
+
+        async function logout() {
+            await fetch('/api/logout');
+            window.location.href = '/dashboard/login.html';
+        }
+
+        async function updateStats() {
+            try {
+                const response = await fetch('/api/stats');
+                if (response.status === 401) {
+                    window.location.href = '/dashboard/login.html';
+                    return;
+                }
+                const data = await response.json();
+                document.getElementById('statBalance').innerText = data.wallet_balance;
+                document.getElementById('statPnL').innerText = data.total_pnl;
+                document.getElementById('statWinRate').innerText = data.win_rate;
+                document.getElementById('statTrades').innerText = data.total_trades;
+                
+                // Update AI Confidence Bar
+                document.getElementById('confBar').style.width = data.latest_confidence + '%';
+                document.getElementById('confVal').innerText = data.latest_confidence + '%';
+            } catch (e) { console.error('Update Stats Error', e); }
+        }
 
         async function loadConfig() {
             try {

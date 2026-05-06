@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks, Depends, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, BackgroundTasks, Depends, WebSocket, WebSocketDisconnect, Request, Response, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import asyncio
@@ -56,15 +56,46 @@ def read_root():
     return {"status": "BinBot Pro Backend is Live"}
 
 @app.get("/api/trades")
-def get_trades(db: Session = Depends(get_db)):
+# Global State
+bot_running = False
+bot_task = None
+latest_confidence = 0.5
+LATEST_PRICES = {"LABUSDT": 0.0}
+connected_clients = []
+
+# Authentication Layer
+def is_authenticated(request: Request):
+    auth_cookie = request.cookies.get("binbot_session")
+    return auth_cookie == "active_sniper_session"
+
+@app.post("/api/login")
+async def login(data: dict, response: Response):
+    user = os.getenv("DASHBOARD_USER", "admin")
+    pw = os.getenv("DASHBOARD_PASS", "binbot_sniper_2026")
+    
+    if data.get("username") == user and data.get("password") == pw:
+        response.set_cookie(key="binbot_session", value="active_sniper_session", httponly=True)
+        return {"status": "success"}
+    raise HTTPException(status_code=401, detail="Invalid credentials")
+
+@app.get("/api/logout")
+async def logout(response: Response):
+    response.delete_cookie("binbot_session")
+    return {"status": "logged_out"}
+
+@app.get("/api/trades")
+def get_trades(request: Request, db: Session = Depends(get_db)):
+    if not is_authenticated(request): raise HTTPException(status_code=401)
     return db.query(Trade).order_by(Trade.entry_time.desc()).all()
 
 @app.get("/api/logs")
-def get_logs(db: Session = Depends(get_db)):
+def get_logs(request: Request, db: Session = Depends(get_db)):
+    if not is_authenticated(request): raise HTTPException(status_code=401)
     return db.query(LogEntry).order_by(LogEntry.timestamp.desc()).limit(200).all()
 
 @app.get("/api/stats")
-def get_stats(db: Session = Depends(get_db)):
+def get_stats(request: Request, db: Session = Depends(get_db)):
+    if not is_authenticated(request): raise HTTPException(status_code=401)
     ist_today_start = get_ist_now().replace(hour=0, minute=0, second=0, microsecond=0)
     
     # Filter for TODAY only
