@@ -588,8 +588,21 @@ async def bot_loop():
                             
                             if success_count == 3:
                                 log(f"TRIPLE STRIKE SUCCESS: Entry + TP + SL active for {symbol}.", "success")
+                                
+                                # --- TRIPLE VALIDATION PROTOCOL ---
+                                log(f"SAFETY: Commencing Triple-Validation for {symbol}...", "info")
+                                for i in range(1, 4):
+                                    await asyncio.sleep(2 * i) # Sweep 1 (2s), Sweep 2 (4s), Sweep 3 (6s)
+                                    is_safe = executor.verify_sl_active(symbol)
+                                    if is_safe:
+                                        log(f"SAFETY SWEEP {i}/3: Shield Verified for {symbol}.", "success")
+                                    else:
+                                        log(f"SAFETY ALERT {i}/3: Shield MISSING! Force-applying emergency SL...", "error")
+                                        executor.set_tp_sl(symbol, signal, curr_price, cfg.take_profit, cfg.stop_loss)
                             elif success_count > 0:
                                 log(f"PARTIAL STRIKE: Entry okay but SHIELD FAILED ({success_count}/3). Check Binance!", "error")
+                                # Emergency recovery
+                                executor.set_tp_sl(symbol, signal, curr_price, cfg.take_profit, cfg.stop_loss)
                             else:
                                 log(f"STRIKE FAILED: {error or 'Batch Rejected'}", "error")
                                 continue
