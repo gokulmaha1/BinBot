@@ -1,0 +1,129 @@
+from binance.client import Client
+from binance.enums import *
+import os
+import logging
+
+class ExecutionEngine:
+    def __init__(self, client):
+        self.client = client
+
+    def setup_account(self, symbol, leverage):
+        try:
+            self.client.futures_change_leverage(symbol=symbol, leverage=leverage)
+            self.client.futures_change_margin_type(symbol=symbol, marginType='CROSSED')
+            return True
+        except Exception as e:
+            print(f"[EXECUTION] Setup Error (might already be set): {e}")
+            return False
+
+    def get_quantity_precision(self, symbol):
+        try:
+            info = self.client.futures_exchange_info()
+            for s in info['symbols']:
+                if s['symbol'] == symbol:
+                    for f in s['filters']:
+                        if f['filterType'] == 'LOT_SIZE':
+                            step_size = float(f['stepSize'])
+                            precision = 0
+                            if step_size < 1:
+                                precision = len(str(step_size).split('.')[-1].rstrip('0'))
+                            return precision
+            return 0
+        except:
+            return 0
+
+    def place_market_order(self, symbol, side, quantity):
+        try:
+            print(f"[EXECUTION] Placing MARKET {side} for {quantity} {symbol}")
+            order = self.client.futures_create_order(
+                symbol=symbol,
+                side=side,
+                type=ORDER_TYPE_MARKET,
+                quantity=quantity
+            )
+            return order, None
+        except Exception as e:
+            print(f"[EXECUTION] Error: {e}")
+            return None, str(e)
+
+    def get_price_precision(self, symbol):
+        try:
+            info = self.client.futures_exchange_info()
+            for s in info['symbols']:
+                if s['symbol'] == symbol:
+                    return int(s['pricePrecision'])
+            return 2
+        except:
+            return 2
+
+    def place_limit_order(self, symbol, side, qty, price):
+        try:
+            precision = self.get_price_precision(symbol)
+            rounded_price = round(float(price), precision)
+            order = self.client.futures_create_order(
+                symbol=symbol,
+                side=side,
+                type='LIMIT',
+                timeInForce='GTC',
+                quantity=qty,
+                price=rounded_price
+            )
+            return order, None
+        except Exception as e:
+            return None, str(e)
+
+    def set_tp_sl(self, symbol, side, entry_price, tp_pct, sl_pct, absolute_sl=None):
+        exit_side = SIDE_SELL if side == SIDE_BUY else SIDE_BUY
+        
+        # Calculate Prices
+        if side == SIDE_BUY:
+            tp_price = entry_price * (1 + tp_pct)
+            sl_price = entry_price * (1 - sl_pct) if absolute_sl is None else absolute_sl
+        else:
+            tp_price = entry_price * (1 - tp_pct)
+            sl_price = entry_price * (1 + sl_pct) if absolute_sl is None else absolute_sl
+            
+        precision = self.get_price_precision(symbol)
+        tp_price = round(tp_price, precision)
+        sl_price = round(sl_price, precision)
+
+        try:
+            # 1. Cancel any existing TP/SL orders to avoid "closePosition" collisions
+            print(f"[EXECUTION] Cancelling existing orders for {symbol} to re-apply shield...")
+            self.client.futures_cancel_all_open_orders(symbol=symbol)
+            
+            # 2. Re-apply TP
+            print(f"[EXECUTION] Setting TP: {tp_price}, SL: {sl_price}")
+            self.client.futures_create_order(
+                symbol=symbol,
+                side=exit_side,
+                type='TAKE_PROFIT_MARKET',
+                stopPrice=tp_price,
+                closePosition=True
+            )
+            # 3. Re-apply SL
+            if sl_pct > 0:
+                self.client.futures_create_order(
+                    symbol=symbol,
+                    side=exit_side,
+                    type='STOP_MARKET',
+                    stopPrice=sl_price,
+                    closePosition=True
+                )
+            return True
+        except Exception as e:
+            print(f"[EXECUTION] TP/SL Error: {e}")
+            return False
+
+    def verify_sl_active(self, symbol):
+        try:
+            open_orders = self.client.futures_get_open_orders(symbol=symbol)
+            # We consider the shield active if there is at least ONE STOP_MARKET or TAKE_PROFIT_MARKET order
+            # This prevents the loop if one is placed but the other is pending or cancelled
+            has_sl = any(o['type'] == 'STOP_MARKET' for o in open_orders)
+            has_tp = any(o['type'] == 'TAKE_PROFIT_MARKET' for o in open_orders)
+            
+            return has_sl and has_tp # Both must exist for a healthy shield
+        except Exception as e:
+            print(f"[EXECUTION] SL Verification Error: {e}")
+            return True # Return True on error to prevent spamming orders during API blips

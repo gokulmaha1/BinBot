@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BinBot PRO | Hardened Dashboard</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --primary: #3b82f6;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            background-color: var(--bg); 
+            color: var(--text); 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.5;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: var(--bg);
+            border-bottom: 1px solid #334155;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo { font-size: 1.5rem; font-weight: bold; }
+        .logo span { color: var(--primary); }
+
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-start { background: var(--success); color: white; }
+        .btn-stop { background: var(--danger); color: white; }
+        .btn-reset { background: transparent; border: 1px solid #334155; color: var(--text-dim); margin-top: 10px; width: 100%; }
+
+        .container { max-width: 98%; margin: 1rem auto; padding: 0 1rem; }
+
+        .card { background: var(--card); border-radius: 16px; padding: 1.2rem; border: 1px solid #334155; margin-bottom: 1rem; }
+        .card-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 0.8rem; display: flex; justify-content: space-between; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem; }
+        .stat-box { background: var(--card); padding: 0.8rem; border-radius: 12px; border: 1px solid #334155; text-align: center; }
+        .stat-label { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-value { font-size: 1.4rem; font-weight: bold; margin-top: 2px; }
+
+        input, select {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            outline: none;
+            appearance: none; /* Modern look */
+        }
+        input:focus, select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        select {
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 15px;
+            padding-right: 30px;
+        }
+        input::placeholder { color: #475569; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th { text-align: left; color: var(--text-dim); font-size: 0.8rem; padding: 1rem; border-bottom: 1px solid #334155; }
+        td { padding: 1rem; border-bottom: 1px solid #1e293b; font-size: 0.9rem; }
+
+        .pnl-pos { color: var(--success); }
+        .pnl-neg { color: var(--danger); }
+
+        .logs-container { max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; }
+        .log-entry { padding: 0.5rem; border-left: 3px solid var(--primary); margin-bottom: 4px; background: rgba(255,255,255,0.02); }
+        .log-error { border-color: var(--danger); }
+        .log-warn { border-color: var(--warning); }
+        .log-success { border-color: var(--success); }
+
+        .input-group { margin-bottom: 1rem; }
+        .input-group label { display: block; color: var(--text-dim); font-size: 0.8rem; margin-bottom: 4px; }
+        .input-group input { width: 100%; background: #0f172a; border: 1px solid #334155; color: white; padding: 0.6rem; border-radius: 8px; }
+
+        @media (max-width: 900px) {
+            .container { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">BinBot <span>PRO</span></div>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div id="botStatus">Bot Idle</div>
+            <button id="toggleBtn" class="btn btn-start">Start Bot</button>
+        </div>
+    </nav>
+
+    <div class="container" style="max-width: 1400px; padding: 0 1rem;">
+        <!-- Row 1: Stats -->
+        <div class="stats-grid">
+            <div class="stat-box"><div class="stat-label">Balance</div><div id="statBalance" class="stat-value">$0.00</div></div>
+            <div class="stat-box"><div class="stat-label">Today's PnL</div><div id="statPnL" class="stat-value">$0.00</div></div>
+            <div class="stat-box"><div class="stat-label">Win Rate</div><div id="statWinRate" class="stat-value">0%</div></div>
+            <div class="stat-box"><div class="stat-label">Trades</div><div id="statTrades" class="stat-value">0</div></div>
+        </div>
+
+        <!-- Row 2: 3-Column Command Center -->
+        <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+            <!-- Column 1: Live Feed & AI -->
+            <div class="card" style="margin-bottom: 0;">
+                <div class="card-title">Live Feed: <span id="livePrice" style="color: #60a5fa;">$0.00</span></div>
+                <canvas id="priceChart" style="width: 100%; height: 260px; background: rgba(0,0,0,0.2); border-radius: 8px;"></canvas>
+                
+                <div style="margin-top: 1rem;">
+                    <div class="card-title" style="font-size: 0.9rem; margin-bottom: 0.5rem;">AI Sniper Confidence</div>
+                    <div style="height: 10px; background: #0f172a; border-radius: 5px; overflow: hidden;">
+                        <div id="confBar" style="height: 100%; width: 50%; background: var(--primary); transition: width 0.5s;"></div>
+                    </div>
+                    <div id="confVal" style="text-align: right; font-size: 0.8rem; margin-top: 0.2rem;">50%</div>
+                </div>
+            </div>
+
+            <!-- Column 2: Risk Controls -->
+            <div class="card" style="margin-bottom: 0;">
+                <div class="card-title">Risk Sniper Settings</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;">
+                    <div class="input-group"><label>Leverage</label><input type="number" id="cfgLev" value="20"></div>
+                    <div class="input-group"><label>Stop Loss %</label><input type="number" id="cfgSL" value="1.5" step="0.1"></div>
+                    <div class="input-group"><label>Take Profit %</label><input type="number" id="cfgTP" value="0.75" step="0.05"></div>
+                    <div class="input-group"><label>Daily Loss $</label><input type="number" id="cfgDLL" value="200"></div>
+                    <div class="input-group"><label>Dynamic Mode</label>
+                        <select id="cfgDynamic"><option value="true">ENABLE (%)</option><option value="false">DISABLE</option></select>
+                    </div>
+                    <div class="input-group"><label>Risk Per Trade</label><input type="number" id="cfgRiskPct" value="50"></div>
+                    <div class="input-group"><label>DCA Recovery</label>
+                        <select id="cfgDCA"><option value="false">OFF</option><option value="true">ON</option></select>
+                    </div>
+                    <div class="input-group"><label>Trailing SL</label>
+                        <select id="cfgTrailing"><option value="true">ON</option><option value="false">OFF</option></select>
+                    </div>
+                </div>
+                <button id="saveBtn" class="btn btn-save" style="width: 100%; margin-top: 1rem;">Save Configuration</button>
+                <button id="resetBtn" class="btn btn-start" style="width: 100%; margin-top: 0.5rem; background: #374151;">Reset Daily PnL Counter</button>
+            </div>
+
+            <!-- Column 3: Live System Logs -->
+            <div class="card" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                <div class="card-title">System Status Logs</div>
+                <div id="logsContainer" class="logs-container" style="flex-grow: 1; overflow-y: auto; font-size: 0.75rem; max-height: 380px;">
+                    <!-- Logs here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 3: History -->
+        <div class="card" style="margin-top: 1rem;">
+            <div class="card-title">Recent Trade Activity</div>
+            <div style="overflow-x: auto; max-height: 300px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                    <thead>
+                        <tr style="text-align: left; color: #94a3b8; border-bottom: 1px solid #374151;">
+                            <th style="padding: 0.5rem;">Time</th><th>Pair</th><th>Side</th><th>Lev</th><th>Qty</th><th>Entry</th><th>PnL</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tradeBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isRunning = false;
+        let priceData = [];
+        const maxPoints = 100;
+        const canvas = document.getElementById('priceChart');
+        const ctx = canvas.getContext('2d');
+
+        function initChart() {
+            canvas.width = canvas.parentElement.clientWidth - 32;
+            canvas.height = 200;
+        }
+
+        function drawChart() {
+            if (priceData.length < 2) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const min = Math.min(...priceData);
+            const max = Math.max(...priceData);
+            const range = max - min || 1;
+            
+            ctx.beginPath();
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 2;
+            
+            const stepX = canvas.width / (maxPoints - 1);
+            
+            priceData.forEach((p, i) => {
+                const x = i * stepX;
+                const y = canvas.height - ((p - min) / range * (canvas.height - 40) + 20);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            
+            ctx.stroke();
+
+            // Gradient
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, 'rgba(59, 130, 246, 0.2)');
+            grad.addColorStop(1, 'rgba(59, 130, 246, 0)');
+            ctx.lineTo((priceData.length - 1) * stepX, canvas.height);
+            ctx.lineTo(0, canvas.height);
+            ctx.fillStyle = grad;
+            ctx.fill();
+        }
+
+        let pollInterval = null;
+
+        function connectWS() {
+            // Use 127.0.0.1 for maximum compatibility on Windows
+            const host = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
+            const wsUrl = `ws://${host}:${window.location.port}/ws/price`;
+            console.log("Attempting WS connection to:", wsUrl);
+            
+            const ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log("SUCCESS: Socket Connected!");
+                document.getElementById('botStatus').innerText = "LIVE DATA ACTIVE";
+                document.getElementById('botStatus').style.color = "#10b981"; // Success Green
+                if (pollInterval) clearInterval(pollInterval);
+                pollInterval = null;
+            };
+
+            ws.onmessage = (event) => {
+                console.log("Raw WS Message:", event.data);
+                const data = JSON.parse(event.data);
+                console.log("DATA RECEIVED:", data);
+                if (data.symbol === "LABUSDT") {
+                    updateChart(data.price);
+                    document.getElementById('livePrice').innerText = `$${data.price.toFixed(4)}`;
+                }
+            };
+            
+            ws.onerror = () => ws.close();
+            
+            ws.onclose = () => {
+                console.log("Socket Closed. Starting Fallback Polling...");
+                if (!pollInterval) {
+                    pollInterval = setInterval(async () => {
+                        try {
+                            const res = await fetch('/api/price');
+                            const data = await res.json();
+                            if (data.price > 0) {
+                                updateChart(data.price);
+                                document.getElementById('livePrice').innerText = `$${data.price.toFixed(4)} (Rest Mode)`;
+                            }
+                        } catch(e) {}
+                    }, 1500);
+                }
+                setTimeout(connectWS, 5000);
+            };
+        }
+
+        async function updateData() {
+            try {
+                // Stats
+                const statsRes = await fetch('/api/stats');
+                const stats = await statsRes.json();
+                document.getElementById('statBalance').innerText = stats.wallet_balance;
+                document.getElementById('statPnL').innerText = stats.total_pnl;
+                document.getElementById('statWinRate').innerText = stats.win_rate;
+                document.getElementById('statTrades').innerText = stats.total_trades;
+                document.getElementById('confBar').style.width = stats.latest_confidence + '%';
+                document.getElementById('confVal').innerText = stats.latest_confidence + '%';
+
+                // Trades
+                const tradesRes = await fetch('/api/trades');
+                const trades = await tradesRes.json();
+                const tbody = document.getElementById('tradeBody');
+                tbody.innerHTML = trades.map(t => `
+                    <tr>
+                        <td style="color: #94a3b8">${new Date(t.entry_time).toLocaleTimeString()}</td>
+                        <td style="font-weight: bold">${t.symbol}</td>
+                        <td><span style="padding: 2px 6px; border-radius: 4px; font-weight: bold; background: ${t.side === 'BUY' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}; color: ${t.side === 'BUY' ? '#22c55e' : '#ef4444'}">${t.side}</span></td>
+                        <td>${t.leverage}x</td>
+                        <td>${t.quantity}</td>
+                        <td>$${t.entry_price}</td>
+                        <td class="${t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${t.pnl ? '$' + t.pnl.toFixed(2) : '-'}</td>
+                    </tr>
+                `).join('');
+
+                // Logs
+                const logsRes = await fetch('/api/logs');
+                const logs = await logsRes.json();
+                const lcon = document.getElementById('logsContainer');
+                lcon.innerHTML = logs.map(l => `
+                    <div class="log-entry ${l.level === 'error' ? 'log-error' : (l.level === 'warning' ? 'log-warn' : (l.level === 'success' ? 'log-success' : ''))}">
+                        <span style="color: #64748b">${new Date(l.timestamp).toLocaleTimeString()}</span>
+                        <b style="color: ${l.level === 'error' ? '#ef4444' : (l.level === 'warning' ? '#f59e0b' : (l.level === 'success' ? '#22c55e' : '#3b82f6'))}">${l.level.toUpperCase()}</b>
+                        ${l.message}
+                    </div>
+                `).join('');
+
+                // Status
+                const statusRes = await fetch('/api/bot/status');
+                const status = await statusRes.json();
+                isRunning = status.running;
+                const tBtn = document.getElementById('toggleBtn');
+                const sTxt = document.getElementById('botStatus');
+                tBtn.innerText = isRunning ? 'Stop Bot' : 'Start Bot';
+                tBtn.className = 'btn ' + (isRunning ? 'btn-stop' : 'btn-start');
+                sTxt.innerText = isRunning ? 'Bot Scanning...' : 'Bot Idle';
+                sTxt.style.color = isRunning ? '#22c55e' : '#ef4444';
+
+            } catch (e) { console.error('Update Error', e); }
+        }
+
+        document.getElementById('toggleBtn').onclick = async () => {
+            const action = isRunning ? 'stop' : 'start';
+            await fetch(`/api/bot/${action}`, { method: 'POST' });
+            updateData();
+        };
+
+        document.getElementById('resetBtn').onclick = async () => {
+            if(!confirm('Reset Daily PnL Counter?')) return;
+            await fetch('/api/bot/reset_pnl', { method: 'POST' });
+            alert('Reset Successful!');
+            updateData();
+        };
+
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/config');
+                const cfg = await res.json();
+                document.getElementById('cfgLev').value = cfg.leverage;
+                document.getElementById('cfgTP').value = cfg.take_profit;
+                document.getElementById('cfgSL').value = cfg.stop_loss;
+                document.getElementById('cfgDLL').value = cfg.daily_loss_limit;
+                document.getElementById('cfgDynamic').value = cfg.use_dynamic.toString();
+                document.getElementById('cfgRiskPct').value = cfg.dynamic_risk_pct;
+                document.getElementById('cfgDCA').value = cfg.dca.toString();
+                document.getElementById('cfgTrailing').value = cfg.trailing_sl.toString();
+            } catch (e) { console.error('Config Load Error', e); }
+        }
+
+        document.getElementById('saveBtn').onclick = async () => {
+            const data = {
+                leverage: document.getElementById('cfgLev').value,
+                take_profit: document.getElementById('cfgTP').value,
+                stop_loss: document.getElementById('cfgSL').value,
+                daily_loss_limit: document.getElementById('cfgDLL').value,
+                use_dynamic: document.getElementById('cfgDynamic').value,
+                dynamic_risk_pct: document.getElementById('cfgRiskPct').value,
+                dca: document.getElementById('cfgDCA').value,
+                trailing_sl: document.getElementById('cfgTrailing').value
+            };
+            const res = await fetch('/api/config/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            if(result.message) alert('Configuration Saved to Database!');
+            else alert('Error: ' + result.error);
+        };
+
+        setInterval(updateData, 5000);
+        initChart();
+        connectWS();
+        window.onresize = initChart;
+        loadConfig();
+        updateData();
+    </script>
+</body>
+</html>
