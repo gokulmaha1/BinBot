@@ -329,46 +329,50 @@ async def bot_loop():
 
                 # 5. DCA RECOVERY (Manage Loss)
                 pnl_pct = ((curr_p - any_open.entry_price) / any_open.entry_price * 100) * (1 if any_open.side == "BUY" else -1)
+                roi_pct = pnl_pct * any_open.leverage
                 
-                # If loss exceeds -0.6% and we haven't DCA'd yet
+                # If DCA is OFF, never add value. If ON, follow recovery rules.
                 if cfg.dca_enabled and pnl_pct < -0.6 and any_open.fee < 10: 
                     log(f"DCA RECOVERY: Firing RECOVERY order for {any_open.symbol}...", "warning")
-                    
-                    # FIX: Correctly round the DCA Quantity
+                    # ... (DCA logic)
                     qty_precision = executor.get_quantity_precision(any_open.symbol)
                     dca_qty = round(any_open.quantity * 0.8, qty_precision)
-                    
                     if qty_precision == 0: dca_qty = int(dca_qty)
                     
                     order, error = executor.place_market_order(any_open.symbol, any_open.side, dca_qty)
-                    
                     if order:
-                        # Update DB entry to reflect new state
                         db = SessionLocal()
                         t = db.query(Trade).filter(Trade.id == any_open.id).first()
                         t.quantity += dca_qty
                         t.fee = 15 # Flag to prevent multiple DCA
-                        
-                        # Recalculate average entry (approximation)
                         new_entry = (any_open.entry_price * any_open.quantity + curr_p * dca_qty) / (any_open.quantity + dca_qty)
                         t.entry_price = new_entry
-                        
-                        # Move TP to Break-Even + 0.1% (Safe Exit)
                         executor.set_tp_sl(any_open.symbol, any_open.side, new_entry, 0.001, cfg.stop_loss)
-                        
-                        db.commit()
-                        db.close()
-                        log(f"RECOVERY SUCCESS: Average Entry lowered to {new_entry:.4f}. TP moved to BREAK-EVEN.", "warning")
+                        db.commit(); db.close()
+                        log(f"RECOVERY SUCCESS: Entry lowered to {new_entry:.4f}.", "warning")
                     else:
                         log(f"RECOVERY FAILED: {error}", "error")
 
-                # 6. DYNAMIC SMART MANAGEMENT (Trend Riding & TP Extension)
+                # 6. DYNAMIC SMART MANAGEMENT (Shield System)
                 now = datetime.now(IST)
                 duration_mins = (now - any_open.entry_time.replace(tzinfo=IST)).total_seconds() / 60
                 
                 if cfg.trailing_sl_enabled:
+                    # TIER 0: BREAK-EVEN SHIELD (+5% ROI Lock)
+                    # If ROI > 5%, move SL to positive side (cover fees: ~0.1% net)
+                    if roi_pct >= 5.0 and any_open.fee < 2:
+                        log(f"FORTRESS SHIELD: +5% ROI reached. Locking BREAK-EVEN for {any_open.symbol}.", "success")
+                        is_buy = any_open.side == "BUY"
+                        # Entry + 0.1% to cover 0.05% entry + 0.05% exit fees
+                        safe_sl = any_open.entry_price * (1.001 if is_buy else 0.999)
+                        await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, cfg.take_profit, 0, absolute_sl=safe_sl)
+                        db = SessionLocal()
+                        t = db.query(Trade).filter(Trade.id == any_open.id).first()
+                        t.fee = 2 # Fortress Protected
+                        db.commit(); db.close()
+
                     # TIER 1: BREAK-EVEN LOCK (+0.4% move)
-                    if pnl_pct > 0.4 and any_open.fee < 5:
+                    elif pnl_pct > 0.4 and any_open.fee < 5:
                         log(f"SMART SHIELD: Moving SL to BREAK-EVEN for {any_open.symbol}.", "warning")
                         await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, cfg.take_profit, 0, absolute_sl=any_open.entry_price)
                         db = SessionLocal()
@@ -542,8 +546,10 @@ async def bot_loop():
                                     log(f"SHIELD: Balance too low (${wallet_usdt:.2f}). Minimum $5 required.", "warning")
                                     continue
                                     
-                                risk_pct = cfg.dynamic_risk_pct if cfg.use_dynamic else 0.50 # default
-                                # REVENGE SHIELD: Reduce size on losing streaks
+                                # Hard Rule: Always use 50% of available wallet for the trade value (Margin)
+                                risk_pct = 0.50 
+                                
+                                # Apply safety reductions only (Never exceed 50%)
                                 if consecutive_losses == 1: 
                                     risk_pct *= 0.75
                                     log("SHIELD: Reducing trade size by 25% due to recent loss.", "info")
@@ -559,7 +565,7 @@ async def bot_loop():
                                 
                                 target_value = investment * active_leverage 
                                 raw_qty = target_value / curr_price
-                                log(f"DYNAMIC: Scaling trade to ${investment:.2f} ({risk_pct*100}% of ${wallet_usdt:.2f} balance)", "info")
+                                log(f"FORTRESS ALLOCATION: Using ${investment:.2f} (Fixed 50% of ${wallet_usdt:.2f} balance)", "warning")
                             except Exception as e:
                                 log(f"DYNAMIC ERROR: Could not fetch balance ({e}). Using safety fallback $5.", "error")
                                 target_value = 5.0 * active_leverage
