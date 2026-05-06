@@ -57,14 +57,16 @@ async def serve_dashboard(request: Request):
         return RedirectResponse(url="/dashboard/login.html")
     return FileResponse("frontend/index.html")
 
+@app.get("/dashboard/login.html")
+async def serve_login():
+    return FileResponse("frontend/login.html")
+
+# Serve specific assets manually to ensure total control
 @app.get("/dashboard/index.html")
 async def serve_index(request: Request):
     if not is_authenticated(request):
         return RedirectResponse(url="/dashboard/login.html")
     return FileResponse("frontend/index.html")
-
-# Serve other static assets (CSS, JS, images)
-app.mount("/dashboard", StaticFiles(directory="frontend"), name="frontend")
 
 def get_db():
     db = SessionLocal()
