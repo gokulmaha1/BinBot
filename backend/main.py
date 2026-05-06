@@ -55,7 +55,6 @@ def get_db():
 def read_root():
     return {"status": "BinBot Pro Backend is Live"}
 
-@app.get("/api/trades")
 # Global State
 bot_running = False
 bot_task = None
