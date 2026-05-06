@@ -578,9 +578,13 @@ async def bot_loop():
                                 log(f"Execution Failed: Calculated Qty is 0. Check Balance!", "error")
                                 continue
 
-                            # 2. Execute TRIPLE-VERIFIED ATOMIC BATCH
+                            # 2. Execute TRIPLE-VERIFIED ATOMIC BATCH (ROI-BASED)
+                            # Convert ROI % to Price % based on Leverage
+                            tp_price_pct = cfg.take_profit / active_leverage
+                            sl_price_pct = cfg.stop_loss / active_leverage
+
                             results, error = executor.place_atomic_trade(
-                                symbol, signal, qty, curr_price, cfg.take_profit, cfg.stop_loss
+                                symbol, signal, qty, curr_price, tp_price_pct, sl_price_pct
                             )
                             
                             # Validate ALL 3 orders (Entry, TP, SL)
