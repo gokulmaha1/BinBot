@@ -13,7 +13,7 @@ IST = pytz.timezone('Asia/Kolkata')
 def get_ist_now():
     return datetime.datetime.now(IST)
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./database/trading_bot.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/trading_bot.db")
 
 Base = declarative_base()
 

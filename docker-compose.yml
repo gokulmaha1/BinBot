@@ -9,7 +9,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./trade_bot.db:/app/trade_bot.db
+      - ./data:/app/data
     restart: always
     logging:
       driver: "json-file"
