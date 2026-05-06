@@ -52,10 +52,10 @@ def get_db():
         db.close()
 
 @app.get("/")
-def read_root():
+async def read_root():
     return {"status": "BinBot Pro Backend is Live"}
 
-# Global State
+# GLOBAL SYSTEM STATE
 bot_running = False
 bot_task = None
 latest_confidence = 0.5
