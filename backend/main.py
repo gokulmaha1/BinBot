@@ -1,6 +1,7 @@
 from fastapi import FastAPI, BackgroundTasks, Depends, WebSocket, WebSocketDisconnect, Request, Response, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from binance.client import Client
@@ -34,6 +35,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Global Sniper Guard Middleware
+@app.middleware("http")
+async def auth_guard(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/dashboard") and "login.html" not in path:
+        auth_cookie = request.cookies.get("binbot_session")
+        if auth_cookie != "active_sniper_session":
+            return RedirectResponse(url="/dashboard/login.html")
+    response = await call_next(request)
+    return response
 
 # Global Sniper State
 bot_running = False
