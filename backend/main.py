@@ -1,24 +1,25 @@
 from fastapi import FastAPI, BackgroundTasks, Depends, WebSocket, WebSocketDisconnect, Request, Response, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-import os
-import asyncio
-from dotenv import load_dotenv
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
+from datetime import datetime, timedelta, timezone
 from binance.client import Client
 from binance import AsyncClient, BinanceSocketManager
-from sqlalchemy.orm import Session
+from dotenv import load_dotenv
+import os
+import asyncio
+import pandas as pd
 
-from fastapi.staticfiles import StaticFiles
+# Internal Imports
 from backend.database import init_db, SessionLocal, Trade, LogEntry, Config
-
 from backend.execution import ExecutionEngine
 from backend.strategy import HybridStrategy
 from backend.notification import NotificationService
-from datetime import datetime, timedelta, timezone
-import pandas as pd
 from bot import config
 
 # Time Helpers
 IST = timezone(timedelta(hours=5, minutes=30))
+
 def get_ist_now():
     return datetime.now(IST)
 
@@ -29,20 +30,20 @@ app = FastAPI(title="BinBot Pro Dashboard")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Serve Frontend
+# Global Sniper State
+bot_running = False
+bot_task = None
+latest_confidence = 0.5
+LATEST_PRICES = {"LABUSDT": 0.0}
+connected_clients = []
+
+# Serve Dashboard Frontend
 app.mount("/dashboard", StaticFiles(directory="frontend", html=True), name="frontend")
-
-
-# Initialize DB and Background Feed on startup
-@app.on_event("startup")
-async def startup_event():
-    init_db()
-    # Start the real-time price feed immediately on launch
-    asyncio.create_task(start_socket_feed())
 
 def get_db():
     db = SessionLocal()
@@ -51,27 +52,24 @@ def get_db():
     finally:
         db.close()
 
-@app.get("/")
-async def read_root():
-    return {"status": "BinBot Pro Backend is Live"}
-
-# GLOBAL SYSTEM STATE
-bot_running = False
-bot_task = None
-latest_confidence = 0.5
-LATEST_PRICES = {"LABUSDT": 0.0}
-connected_clients = []
-
 # Authentication Layer
 def is_authenticated(request: Request):
     auth_cookie = request.cookies.get("binbot_session")
     return auth_cookie == "active_sniper_session"
 
+@app.on_event("startup")
+async def startup_event():
+    init_db()
+    asyncio.create_task(start_socket_feed())
+
+@app.get("/")
+async def read_root():
+    return {"status": "BinBot Pro Backend is Live"}
+
 @app.post("/api/login")
 async def login(data: dict, response: Response):
     user = os.getenv("DASHBOARD_USER", "admin")
     pw = os.getenv("DASHBOARD_PASS", "binbot_sniper_2026")
-    
     if data.get("username") == user and data.get("password") == pw:
         response.set_cookie(key="binbot_session", value="active_sniper_session", httponly=True)
         return {"status": "success"}
