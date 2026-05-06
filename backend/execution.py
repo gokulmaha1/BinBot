@@ -46,20 +46,25 @@ class ExecutionEngine:
             print(f"[EXECUTION] Error: {e}")
             return None, str(e)
 
-    def get_price_precision(self, symbol):
+    def get_price_info(self, symbol):
         try:
             info = self.client.futures_exchange_info()
             for s in info['symbols']:
                 if s['symbol'] == symbol:
-                    return int(s['pricePrecision'])
-            return 2
+                    for f in s['filters']:
+                        if f['filterType'] == 'PRICE_FILTER':
+                            tick_size = float(f['tickSize'])
+                            precision = len(str(f['tickSize']).split('.')[-1].rstrip('0')) if '.' in str(f['tickSize']) else 0
+                            return tick_size, precision
+            return 0.01, 2
         except:
-            return 2
+            return 0.01, 2
 
-    def place_limit_order(self, symbol, side, qty, price):
-        try:
-            precision = self.get_price_precision(symbol)
-            rounded_price = round(float(price), precision)
+    def round_price(self, symbol, price):
+        tick_size, precision = self.get_price_info(symbol)
+        if tick_size == 0: return round(price, 2)
+        # Calculate exactly how many "ticks" fit into the price
+        return round(round(float(price) / tick_size) * tick_size, precision)
             order = self.client.futures_create_order(
                 symbol=symbol,
                 side=side,
@@ -83,36 +88,36 @@ class ExecutionEngine:
             tp_price = entry_price * (1 - tp_pct)
             sl_price = entry_price * (1 + sl_pct) if absolute_sl is None else absolute_sl
             
-        precision = self.get_price_precision(symbol)
-        tp_price = round(tp_price, precision)
-        sl_price = round(sl_price, precision)
+        tp_price = self.round_price(symbol, tp_price)
+        sl_price = self.round_price(symbol, sl_price)
 
         try:
             # 1. Cancel any existing TP/SL orders to avoid "closePosition" collisions
-            print(f"[EXECUTION] Cancelling existing orders for {symbol} to re-apply shield...")
             self.client.futures_cancel_all_open_orders(symbol=symbol)
             
             # 2. Re-apply TP
-            print(f"[EXECUTION] Setting TP: {tp_price}, SL: {sl_price}")
+            print(f"[EXECUTION] Setting TP: {tp_price}, SL: {sl_price} for {symbol}")
             self.client.futures_create_order(
                 symbol=symbol,
                 side=exit_side,
                 type='TAKE_PROFIT_MARKET',
                 stopPrice=tp_price,
-                closePosition=True
+                closePosition=True,
+                workingType='MARK_PRICE'
             )
             # 3. Re-apply SL
-            if sl_pct > 0:
+            if sl_pct > 0 or absolute_sl is not None:
                 self.client.futures_create_order(
                     symbol=symbol,
                     side=exit_side,
                     type='STOP_MARKET',
                     stopPrice=sl_price,
-                    closePosition=True
+                    closePosition=True,
+                    workingType='MARK_PRICE'
                 )
             return True
         except Exception as e:
-            print(f"[EXECUTION] TP/SL Error: {e}")
+            print(f"[EXECUTION] TP/SL Error for {symbol}: {e}")
             return False
 
     def verify_sl_active(self, symbol):
