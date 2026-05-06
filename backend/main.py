@@ -45,9 +45,6 @@ latest_confidence = 0.5
 LATEST_PRICES = {"LABUSDT": 0.0}
 connected_clients = []
 
-# Authentication Helper
-def is_authenticated(request: Request):
-    return request.cookies.get("binbot_session") == "active_sniper_session"
 
 # PROTECTED FRONTEND ROUTES
 @app.get("/dashboard")
@@ -75,7 +72,7 @@ def get_db():
     finally:
         db.close()
 
-# Authentication Layer
+# Authentication Helper
 def is_authenticated(request: Request):
     auth_cookie = request.cookies.get("binbot_session")
     return auth_cookie == "active_sniper_session"
