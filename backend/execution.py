@@ -135,7 +135,7 @@ class ExecutionEngine:
                 tp_price = self.round_price(symbol, curr_price * (1 - tp_pct))
                 sl_price = self.round_price(symbol, curr_price * (1 + sl_pct))
 
-            # 2. Construct Batch
+            # 2. Construct Batch with Explicit Quantities for reliability
             batch = [
                 {
                     'symbol': symbol,
@@ -148,20 +148,22 @@ class ExecutionEngine:
                     'side': exit_side,
                     'type': 'TAKE_PROFIT_MARKET',
                     'stopPrice': str(tp_price),
-                    'closePosition': 'true',
-                    'workingType': 'MARK_PRICE'
+                    'quantity': str(qty),
+                    'workingType': 'MARK_PRICE',
+                    'reduceOnly': 'true'
                 },
                 {
                     'symbol': symbol,
                     'side': exit_side,
                     'type': 'STOP_MARKET',
                     'stopPrice': str(sl_price),
-                    'closePosition': 'true',
-                    'workingType': 'MARK_PRICE'
+                    'quantity': str(qty),
+                    'workingType': 'MARK_PRICE',
+                    'reduceOnly': 'true'
                 }
             ]
             
-            print(f"[EXECUTION] Firing ATOMIC BATCH for {symbol}...")
+            print(f"[EXECUTION] Firing TRIPLE-VERIFIED ATOMIC BATCH for {symbol}...")
             results = self.client.futures_place_batch_order(batchOrders=batch)
             return results, None
         except Exception as e:

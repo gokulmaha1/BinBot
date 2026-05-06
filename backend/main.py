@@ -578,16 +578,20 @@ async def bot_loop():
                                 log(f"Execution Failed: Calculated Qty is 0. Check Balance!", "error")
                                 continue
 
-                            # 2. Execute ATOMIC BATCH (Entry + TP + SL in one shot)
+                            # 2. Execute TRIPLE-VERIFIED ATOMIC BATCH
                             results, error = executor.place_atomic_trade(
                                 symbol, signal, qty, curr_price, cfg.take_profit, cfg.stop_loss
                             )
                             
-                            if results and len(results) > 0 and 'orderId' in results[0]:
-                                log(f"ATOMIC STRIKE SUCCESS: {signal} {qty} {symbol} entered with Shield active.", "success")
-                                log(f"SHIELD ACTIVE: TP {cfg.take_profit*100}% | SL: {cfg.stop_loss*100}%", "info")
+                            # Validate ALL 3 orders (Entry, TP, SL)
+                            success_count = sum(1 for r in results if isinstance(r, dict) and 'orderId' in r)
+                            
+                            if success_count == 3:
+                                log(f"TRIPLE STRIKE SUCCESS: Entry + TP + SL active for {symbol}.", "success")
+                            elif success_count > 0:
+                                log(f"PARTIAL STRIKE: Entry okay but SHIELD FAILED ({success_count}/3). Check Binance!", "error")
                             else:
-                                log(f"ATOMIC STRIKE FAILED: {error}", "error")
+                                log(f"STRIKE FAILED: {error or 'Batch Rejected'}", "error")
                                 continue
 
                             # 3. Save to Database
