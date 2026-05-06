@@ -40,10 +40,18 @@ app.add_middleware(
 @app.middleware("http")
 async def auth_guard(request: Request, call_next):
     path = request.url.path
-    if path.startswith("/dashboard") and "login.html" not in path:
+    
+    # Strictly protect all dashboard files except login
+    if path.startswith("/dashboard"):
+        # Allow the login page itself and its assets
+        if "login.html" in path:
+            return await call_next(request)
+            
+        # Check authentication for everything else in /dashboard
         auth_cookie = request.cookies.get("binbot_session")
         if auth_cookie != "active_sniper_session":
             return RedirectResponse(url="/dashboard/login.html")
+            
     response = await call_next(request)
     return response
 
