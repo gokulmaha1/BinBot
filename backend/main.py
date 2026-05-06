@@ -84,7 +84,7 @@ async def startup_event():
 
 @app.get("/")
 async def read_root():
-    return {"status": "BinBot Pro Backend is Live"}
+    return RedirectResponse(url="/dashboard/")
 
 @app.post("/api/login")
 async def login(data: dict, response: Response):
