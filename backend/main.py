@@ -36,24 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global Sniper Guard Middleware
-@app.middleware("http")
-async def auth_guard(request: Request, call_next):
-    path = request.url.path
-    
-    # Strictly protect all dashboard files except login
-    if path.startswith("/dashboard"):
-        # Allow the login page itself and its assets
-        if "login.html" in path:
-            return await call_next(request)
-            
-        # Check authentication for everything else in /dashboard
-        auth_cookie = request.cookies.get("binbot_session")
-        if auth_cookie != "active_sniper_session":
-            return RedirectResponse(url="/dashboard/login.html")
-            
-    response = await call_next(request)
-    return response
+from fastapi.responses import FileResponse
 
 # Global Sniper State
 bot_running = False
@@ -62,8 +45,26 @@ latest_confidence = 0.5
 LATEST_PRICES = {"LABUSDT": 0.0}
 connected_clients = []
 
-# Serve Dashboard Frontend
-app.mount("/dashboard", StaticFiles(directory="frontend", html=True), name="frontend")
+# Authentication Helper
+def is_authenticated(request: Request):
+    return request.cookies.get("binbot_session") == "active_sniper_session"
+
+# PROTECTED FRONTEND ROUTES
+@app.get("/dashboard")
+@app.get("/dashboard/")
+async def serve_dashboard(request: Request):
+    if not is_authenticated(request):
+        return RedirectResponse(url="/dashboard/login.html")
+    return FileResponse("frontend/index.html")
+
+@app.get("/dashboard/index.html")
+async def serve_index(request: Request):
+    if not is_authenticated(request):
+        return RedirectResponse(url="/dashboard/login.html")
+    return FileResponse("frontend/index.html")
+
+# Serve other static assets (CSS, JS, images)
+app.mount("/dashboard", StaticFiles(directory="frontend"), name="frontend")
 
 def get_db():
     db = SessionLocal()
