@@ -105,6 +105,45 @@ def get_trades(request: Request, db: Session = Depends(get_db)):
     if not is_authenticated(request): raise HTTPException(status_code=401)
     return db.query(Trade).order_by(Trade.entry_time.desc()).all()
 
+@app.get("/api/config")
+async def get_config(request: Request):
+    if not is_authenticated(request): raise HTTPException(status_code=401)
+    db = SessionLocal()
+    cfg = db.query(Config).first()
+    db.close()
+    return {
+        "leverage": cfg.leverage,
+        "take_profit": cfg.take_profit,
+        "stop_loss": cfg.stop_loss,
+        "daily_loss_limit": cfg.daily_loss_limit,
+        "use_dynamic": cfg.use_dynamic,
+        "dynamic_risk_pct": cfg.dynamic_risk_pct,
+        "dca": cfg.dca_enabled,
+        "trailing_sl": cfg.trailing_sl_enabled
+    }
+
+@app.post("/api/config/update")
+async def update_config(data: dict, request: Request):
+    if not is_authenticated(request): raise HTTPException(status_code=401)
+    db = SessionLocal()
+    cfg = db.query(Config).first()
+    try:
+        cfg.leverage = int(data.get("leverage", 20))
+        cfg.take_profit = float(data.get("take_profit", 0.01))
+        cfg.stop_loss = float(data.get("stop_loss", 0.015))
+        cfg.daily_loss_limit = float(data.get("daily_loss_limit", 200.0))
+        cfg.use_dynamic = str(data.get("use_dynamic")).lower() == "true"
+        cfg.dynamic_risk_pct = float(data.get("dynamic_risk_pct", 0.50))
+        cfg.dca_enabled = str(data.get("dca")).lower() == "true"
+        cfg.trailing_sl_enabled = str(data.get("trailing_sl")).lower() == "true"
+        db.commit()
+        return {"message": "Config updated successfully"}
+    except Exception as e:
+        db.rollback()
+        return {"error": str(e)}
+    finally:
+        db.close()
+
 @app.get("/api/logs")
 def get_logs(request: Request, db: Session = Depends(get_db)):
     if not is_authenticated(request): raise HTTPException(status_code=401)
