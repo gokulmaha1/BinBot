@@ -521,7 +521,7 @@ async def bot_loop():
                             log(f"RADAR: Warming up {symbol} ({len(history)}/20 points)...", "info")
                         continue
 
-                    df = pd.DataFrame(history, columns=['close'])
+
                     
                     # 4. Fetch Technical Data (1m, 5m, 15m)
                     klines_1m = await asyncio.to_thread(client.futures_klines, symbol=symbol, interval='1m', limit=200)
