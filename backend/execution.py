@@ -137,12 +137,11 @@ class ExecutionEngine:
             if "4120" in str(e):
                 print(f"[ALGO] -4120 detected for {symbol}. Migrating {type} to Algo API...")
                 try:
-                    # In some versions of python-binance, we might need a custom call
-                    # or futures_create_algo_order if it exists.
-                    # As a robust fallback, we use type 'STOP' / 'TAKE_PROFIT' which often still works.
-                    return self.client.futures_create_order(
-                        symbol=symbol, side=side, type='STOP' if 'STOP' in type else 'TAKE_PROFIT',
-                        stopPrice=price, price=price, closePosition=True, workingType='MARK_PRICE'
+                    # Use the official Binance Algo Order API endpoint for conditional triggers
+                    return self.client.futures_create_algo_order(
+                        symbol=symbol, side=side, type=type,
+                        stopPrice=price, closePosition=True, workingType='MARK_PRICE',
+                        algoType='CONDITIONAL'
                     )
                 except Exception as e2:
                     print(f"[ALGO] Migration failed: {e2}")
