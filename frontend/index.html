@@ -111,17 +111,18 @@
     </style>
 </head>
 <body>
-    <nav class="navbar">
+    <nav class="navbar" style="flex-wrap: wrap; gap: 0.5rem;">
         <div class="logo">BinBot <span>PRO</span></div>
-        <div style="display: flex; align-items: center; gap: 0.8rem; flex: 1; margin: 0 1.5rem;">
-            <input type="text" id="cfgSymbols" placeholder="e.g. BTCUSDT,ETHUSDT" style="flex: 1; max-width: 350px; padding: 6px 10px; font-size: 0.8rem; border-radius: 6px;">
-            <select id="cfgTestnet" style="padding: 6px 10px; font-size: 0.8rem; border-radius: 6px; min-width: 140px; border-color: var(--warning);">
+        <div style="display: flex; align-items: center; gap: 0.6rem; flex: 1; min-width: 300px;">
+            <span style="color: var(--text-dim); font-size: 0.75rem; white-space: nowrap;">WATCHLIST:</span>
+            <input type="text" id="cfgSymbols" placeholder="BTCUSDT,ETHUSDT,SOLUSDT" style="flex: 1; max-width: 320px; padding: 5px 10px; font-size: 0.8rem; border-radius: 6px;">
+            <select id="cfgTestnet" style="padding: 5px 8px; font-size: 0.8rem; border-radius: 6px; min-width: 120px;">
                 <option value="true">⚡ TESTNET</option>
                 <option value="false">🔴 LIVE</option>
             </select>
         </div>
-        <div style="display: flex; align-items: center; gap: 1rem;">
-            <div id="botStatus">Bot Idle</div>
+        <div style="display: flex; align-items: center; gap: 0.8rem;">
+            <div id="botStatus" style="font-size: 0.85rem; font-weight: bold;">Bot Idle</div>
             <button id="toggleBtn" class="btn btn-start">Start Bot</button>
             <button onclick="logout()" class="btn" style="background: transparent; color: #94a3b8; font-size: 0.8rem;">Logout</button>
         </div>

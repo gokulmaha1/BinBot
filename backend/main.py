@@ -531,10 +531,12 @@ async def bot_loop():
 
 
                     
-                    # 4. Fetch Technical Data (1m, 5m, 15m)
-                    klines_1m = await asyncio.to_thread(client.futures_klines, symbol=symbol, interval='1m', limit=200)
-                    klines_5m = await asyncio.to_thread(client.futures_klines, symbol=symbol, interval='5m', limit=200)
-                    klines_15m = await asyncio.to_thread(client.futures_klines, symbol=symbol, interval='15m', limit=200)
+                    # 4. Fetch Technical Data (1m, 5m, 15m) — PARALLEL
+                    klines_1m, klines_5m, klines_15m = await asyncio.gather(
+                        asyncio.to_thread(client.futures_klines, symbol=symbol, interval='1m', limit=200),
+                        asyncio.to_thread(client.futures_klines, symbol=symbol, interval='5m', limit=200),
+                        asyncio.to_thread(client.futures_klines, symbol=symbol, interval='15m', limit=200),
+                    )
                     
                     if not klines_1m or not klines_5m:
                         continue
