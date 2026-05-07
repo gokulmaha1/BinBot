@@ -672,16 +672,38 @@
 
         function copyLogs() {
             const logs = document.getElementById('logsContainer').innerText;
-            navigator.clipboard.writeText(logs).then(() => {
-                const btn = event.target;
-                const oldText = btn.innerText;
+            const btn = event.target;
+            const oldText = btn.innerText;
+
+            function showSuccess() {
                 btn.innerText = 'Copied!';
                 btn.style.background = 'var(--success)';
                 setTimeout(() => {
                     btn.innerText = oldText;
                     btn.style.background = '#334155';
                 }, 2000);
-            });
+            }
+
+            // Modern API (Requires HTTPS)
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(logs).then(showSuccess).catch(fallbackCopy);
+            } else {
+                fallbackCopy();
+            }
+
+            function fallbackCopy() {
+                const textArea = document.createElement("textarea");
+                textArea.value = logs;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showSuccess();
+                } catch (err) {
+                    alert('Manual copy required: ' + err);
+                }
+                document.body.removeChild(textArea);
+            }
         }
 
         // Init
