@@ -848,6 +848,26 @@ async def bot_loop():
                             
                             results, error, final_tp, final_sl = result
                             
+                            if result and result[0]:
+                                entry_data = result[0]
+                                # Extract actual fill price from Binance result
+                                actual_entry = float(entry_data.get('avgPrice', curr_price))
+                                if actual_entry == 0: # Fallback for some API versions
+                                    actual_entry = float(entry_data.get('price', curr_price))
+                                
+                                # Record in Database with ACTUAL price
+                                new_trade = Trade(
+                                    symbol=symbol,
+                                    side=signal,
+                                    leverage=active_leverage,
+                                    quantity=qty,
+                                    entry_price=actual_entry,
+                                    tp_price=result[2],
+                                    sl_price=result[3],
+                                    status="OPEN",
+                                    entry_time=datetime.now(IST)
+                                )
+                            
                             # Validate ALL 3 orders (Entry, TP, SL)
                             success_count = sum(1 for r in (results or []) if isinstance(r, dict) and 'orderId' in r)
                             
@@ -871,24 +891,18 @@ async def bot_loop():
                             else:
                                 log(f"STRIKE FAILED: {error or 'Batch Rejected'}", "error")
                                 continue
-
+                            
                             # 3. Save to Database
                             db = SessionLocal()
-                            entry_fee = curr_price * qty * 0.0005
-                            new_trade = Trade(
-                                symbol=symbol,
-                                side=signal,
-                                leverage=active_leverage,
-                                entry_price=curr_price,
-                                tp_price=final_tp,
-                                sl_price=final_sl,
-                                quantity=qty,
-                                fee=entry_fee,
-                                status="OPEN"
-                            )
+                            entry_fee = actual_entry * qty * 0.0005 # Using actual fill price for fee
+                            
                             db.add(new_trade)
                             db.commit()
                             db.close()
+                            
+                            # 4. Global Cooldown (30s)
+                            cooldown_until = datetime.now(IST) + timedelta(seconds=30)
+                            
                             break 
  # Exit symbol loop
                 except Exception as e:
