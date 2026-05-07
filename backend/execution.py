@@ -32,6 +32,11 @@ class ExecutionEngine:
             return False, f"Connection Error: {err_str}"
 
     def setup_account(self, symbol, leverage):
+        try:
+            self.client.futures_change_leverage(symbol=symbol, leverage=leverage)
+            self.client.futures_change_margin_type(symbol=symbol, marginType='ISOLATED')
+        except Exception:
+            pass
 
     def get_quantity_precision(self, symbol):
         try:
@@ -144,57 +149,52 @@ class ExecutionEngine:
             return False
 
     def place_atomic_trade(self, symbol, side, qty, curr_price, tp_pct, sl_pct):
-        try:
-            exit_side = SIDE_SELL if side == SIDE_BUY else SIDE_BUY
-            
-            # 1. Round Prices
-            if side == SIDE_BUY:
-                tp_price = self.round_price(symbol, curr_price * (1 + tp_pct))
-                sl_price = self.round_price(symbol, curr_price * (1 - sl_pct))
-            else:
-                tp_price = self.round_price(symbol, curr_price * (1 - tp_pct))
-                sl_price = self.round_price(symbol, curr_price * (1 + sl_pct))
+        """
+        Executes a sequential TRIPLE-STRIKE (Entry -> TP -> SL).
+        Returns (results, error, tp_price, sl_price)
+        """
+        results = []
+        exit_side = SIDE_SELL if side == SIDE_BUY else SIDE_BUY
+        
+        # 1. Calculate Prices
+        if side == SIDE_BUY:
+            tp_price = self.round_price(symbol, curr_price * (1 + tp_pct))
+            sl_price = self.round_price(symbol, curr_price * (1 - sl_pct))
+        else:
+            tp_price = self.round_price(symbol, curr_price * (1 - tp_pct))
+            sl_price = self.round_price(symbol, curr_price * (1 + sl_pct))
 
-            # 2. Construct Batch with Explicit Quantities for reliability
-            batch = [
-                {
-                    'symbol': symbol,
-                    'side': side,
-                    'type': 'MARKET',
-                    'quantity': str(qty)
-                },
-                {
-                    'symbol': symbol,
-                    'side': exit_side,
-                    'type': 'TAKE_PROFIT_MARKET',
-                    'stopPrice': str(tp_price),
-                    'quantity': str(qty),
-                    'workingType': 'MARK_PRICE',
-                    'reduceOnly': 'true'
-                },
-                {
-                    'symbol': symbol,
-                    'side': exit_side,
-                    'type': 'STOP_MARKET',
-                    'stopPrice': str(sl_price),
-                    'quantity': str(qty),
-                    'workingType': 'MARK_PRICE',
-                    'reduceOnly': 'true'
-                }
-            ]
+        try:
+            # STEP 1: ENTRY (MARKET)
+            print(f"[EXECUTION] Step 1: Firing ENTRY MARKET {side} for {symbol}...")
+            entry = self.client.futures_create_order(
+                symbol=symbol, side=side, type='MARKET', quantity=qty
+            )
+            results.append(entry)
             
-            print(f"[EXECUTION] Firing TRIPLE-VERIFIED ATOMIC BATCH for {symbol}...")
-            results = self.client.futures_place_batch_order(batchOrders=batch)
+            # STEP 2: TAKE PROFIT
+            print(f"[EXECUTION] Step 2: Firing TP MARKET at {tp_price}...")
+            tp = self.client.futures_create_order(
+                symbol=symbol, side=exit_side, type='TAKE_PROFIT_MARKET',
+                stopPrice=tp_price, closePosition=True, workingType='MARK_PRICE'
+            )
+            results.append(tp)
             
-            # If batch call itself succeeded, check individual order statuses
-            for r in results:
-                if 'code' in r: # This indicates an error in one of the orders
-                    return results, f"Batch Error: {r.get('msg', 'Unknown rejection')}"
+            # STEP 3: STOP LOSS
+            print(f"[EXECUTION] Step 3: Firing SL MARKET at {sl_price}...")
+            sl = self.client.futures_create_order(
+                symbol=symbol, side=exit_side, type='STOP_MARKET',
+                stopPrice=sl_price, closePosition=True, workingType='MARK_PRICE'
+            )
+            results.append(sl)
             
-            return results, None
+            return results, None, tp_price, sl_price
+            
         except Exception as e:
-            print(f"[EXECUTION] Atomic Error: {e}")
-            return None, str(e)
+            err_msg = str(e)
+            print(f"[EXECUTION] Sequential Error: {err_msg}")
+            # Even if TP/SL fail, we return the entry result if it exists
+            return results, err_msg, tp_price, sl_price
 
     def verify_sl_active(self, symbol):
         try:
