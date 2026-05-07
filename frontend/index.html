@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,10 +17,15 @@
             --text-dim: #94a3b8;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { 
-            background-color: var(--bg); 
-            color: var(--text); 
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             line-height: 1.5;
         }
@@ -36,8 +42,14 @@
             z-index: 100;
         }
 
-        .logo { font-size: 1.5rem; font-weight: bold; }
-        .logo span { color: var(--primary); }
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .logo span {
+            color: var(--primary);
+        }
 
         .btn {
             padding: 0.6rem 1.2rem;
@@ -47,21 +59,77 @@
             cursor: pointer;
             transition: all 0.2s;
         }
-        .btn-start { background: var(--success); color: white; }
-        .btn-stop { background: var(--danger); color: white; }
-        .btn-reset { background: transparent; border: 1px solid #334155; color: var(--text-dim); margin-top: 10px; width: 100%; }
 
-        .container { max-width: 98%; margin: 1rem auto; padding: 0 1rem; }
+        .btn-start {
+            background: var(--success);
+            color: white;
+        }
 
-        .card { background: var(--card); border-radius: 16px; padding: 1.2rem; border: 1px solid #334155; margin-bottom: 1rem; }
-        .card-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 0.8rem; display: flex; justify-content: space-between; }
+        .btn-stop {
+            background: var(--danger);
+            color: white;
+        }
 
-        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem; }
-        .stat-box { background: var(--card); padding: 0.8rem; border-radius: 12px; border: 1px solid #334155; text-align: center; }
-        .stat-label { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
-        .stat-value { font-size: 1.4rem; font-weight: bold; margin-top: 2px; }
+        .btn-reset {
+            background: transparent;
+            border: 1px solid #334155;
+            color: var(--text-dim);
+            margin-top: 10px;
+            width: 100%;
+        }
 
-        input, select {
+        .container {
+            max-width: 98%;
+            margin: 1rem auto;
+            padding: 0 1rem;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 1.2rem;
+            border: 1px solid #334155;
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 0.8rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-box {
+            background: var(--card);
+            padding: 0.8rem;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            text-align: center;
+        }
+
+        .stat-label {
+            color: var(--text-dim);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 1.4rem;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+
+        input,
+        select {
             width: 100%;
             background: #0f172a;
             border: 1px solid #334155;
@@ -72,12 +140,16 @@
             font-size: 0.9rem;
             transition: all 0.2s;
             outline: none;
-            appearance: none; /* Modern look */
+            appearance: none;
+            /* Modern look */
         }
-        input:focus, select:focus {
+
+        input:focus,
+        select:focus {
             border-color: var(--primary);
             box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
         }
+
         select {
             cursor: pointer;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
@@ -86,36 +158,104 @@
             background-size: 15px;
             padding-right: 30px;
         }
-        input::placeholder { color: #475569; }
-        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-        th { text-align: left; color: var(--text-dim); font-size: 0.8rem; padding: 1rem; border-bottom: 1px solid #334155; }
-        td { padding: 1rem; border-bottom: 1px solid #1e293b; font-size: 0.9rem; }
 
-        .pnl-pos { color: var(--success); }
-        .pnl-neg { color: var(--danger); }
+        input::placeholder {
+            color: #475569;
+        }
 
-        .logs-container { max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; }
-        .log-entry { padding: 0.5rem; border-left: 3px solid var(--primary); margin-bottom: 4px; background: rgba(255,255,255,0.02); }
-        .log-error { border-color: var(--danger); }
-        .log-warn { border-color: var(--warning); }
-        .log-success { border-color: var(--success); }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
 
-        .input-group { margin-bottom: 1rem; }
-        .input-group label { display: block; color: var(--text-dim); font-size: 0.8rem; margin-bottom: 4px; }
-        .input-group input { width: 100%; background: #0f172a; border: 1px solid #334155; color: white; padding: 0.6rem; border-radius: 8px; }
+        th {
+            text-align: left;
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            padding: 1rem;
+            border-bottom: 1px solid #334155;
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid #1e293b;
+            font-size: 0.9rem;
+        }
+
+        .pnl-pos {
+            color: var(--success);
+        }
+
+        .pnl-neg {
+            color: var(--danger);
+        }
+
+        .logs-container {
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.8rem;
+        }
+
+        .log-entry {
+            padding: 0.5rem;
+            border-left: 3px solid var(--primary);
+            margin-bottom: 4px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .log-error {
+            border-color: var(--danger);
+        }
+
+        .log-warn {
+            border-color: var(--warning);
+        }
+
+        .log-success {
+            border-color: var(--success);
+        }
+
+        .input-group {
+            margin-bottom: 1rem;
+        }
+
+        .input-group label {
+            display: block;
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            margin-bottom: 4px;
+        }
+
+        .input-group input {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+            padding: 0.6rem;
+            border-radius: 8px;
+        }
 
         @media (max-width: 900px) {
-            .container { grid-template-columns: 1fr; }
-            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .container {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
         }
     </style>
 </head>
+
 <body>
     <nav class="navbar" style="flex-wrap: wrap; gap: 0.5rem;">
         <div class="logo">BinBot <span>PRO</span></div>
         <div style="display: flex; align-items: center; gap: 0.6rem; flex: 1; min-width: 300px;">
             <span style="color: var(--text-dim); font-size: 0.75rem; white-space: nowrap;">WATCHLIST:</span>
-            <input type="text" id="cfgSymbols" placeholder="BTCUSDT,ETHUSDT,SOLUSDT" style="flex: 1; max-width: 320px; padding: 5px 10px; font-size: 0.8rem; border-radius: 6px;">
+            <input type="text" id="cfgSymbols" placeholder="BTCUSDT,ETHUSDT,SOLUSDT"
+                style="flex: 1;width: 320px; padding: 5px 10px; font-size: 0.8rem; border-radius: 6px;">
             <select id="cfgTestnet" style="padding: 5px 8px; font-size: 0.8rem; border-radius: 6px; min-width: 120px;">
                 <option value="true">⚡ TESTNET</option>
                 <option value="false">🔴 LIVE</option>
@@ -124,30 +264,47 @@
         <div style="display: flex; align-items: center; gap: 0.8rem;">
             <div id="botStatus" style="font-size: 0.85rem; font-weight: bold;">Bot Idle</div>
             <button id="toggleBtn" class="btn btn-start">Start Bot</button>
-            <button onclick="logout()" class="btn" style="background: transparent; color: #94a3b8; font-size: 0.8rem;">Logout</button>
+            <button onclick="logout()" class="btn"
+                style="background: transparent; color: #94a3b8; font-size: 0.8rem;">Logout</button>
         </div>
     </nav>
 
     <div class="container" style="max-width: 1400px; padding: 0 1rem;">
         <!-- Row 1: Stats -->
         <div class="stats-grid">
-            <div class="stat-box"><div class="stat-label">Balance</div><div id="statBalance" class="stat-value">$0.00</div></div>
-            <div class="stat-box"><div class="stat-label">Today's PnL</div><div id="statPnL" class="stat-value">$0.00</div></div>
-            <div class="stat-box"><div class="stat-label">Win Rate</div><div id="statWinRate" class="stat-value">0%</div></div>
-            <div class="stat-box"><div class="stat-label">Trades</div><div id="statTrades" class="stat-value">0</div></div>
+            <div class="stat-box">
+                <div class="stat-label">Balance</div>
+                <div id="statBalance" class="stat-value">$0.00</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Today's PnL</div>
+                <div id="statPnL" class="stat-value">$0.00</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Win Rate</div>
+                <div id="statWinRate" class="stat-value">0%</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Trades</div>
+                <div id="statTrades" class="stat-value">0</div>
+            </div>
         </div>
 
         <!-- Row 2: 3-Column Command Center -->
         <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
             <!-- Column 1: Live Feed & AI -->
             <div class="card" style="margin-bottom: 0;">
-                <div class="card-title">Live Feed: <span id="activeAsset" style="font-size: 0.8rem; color: var(--text-dim); margin-right: 10px;">[---]</span> <span id="livePrice" style="color: #60a5fa;">$0.00</span></div>
-                <canvas id="priceChart" style="width: 100%; height: 260px; background: rgba(0,0,0,0.2); border-radius: 8px;"></canvas>
-                
+                <div class="card-title">Live Feed: <span id="activeAsset"
+                        style="font-size: 0.8rem; color: var(--text-dim); margin-right: 10px;">[---]</span> <span
+                        id="livePrice" style="color: #60a5fa;">$0.00</span></div>
+                <canvas id="priceChart"
+                    style="width: 100%; height: 260px; background: rgba(0,0,0,0.2); border-radius: 8px;"></canvas>
+
                 <div style="margin-top: 1rem;">
                     <div class="card-title" style="font-size: 0.9rem; margin-bottom: 0.5rem;">AI Sniper Confidence</div>
                     <div style="height: 10px; background: #0f172a; border-radius: 5px; overflow: hidden;">
-                        <div id="confBar" style="height: 100%; width: 50%; background: var(--primary); transition: width 0.5s;"></div>
+                        <div id="confBar"
+                            style="height: 100%; width: 50%; background: var(--primary); transition: width 0.5s;"></div>
                     </div>
                     <div id="confVal" style="text-align: right; font-size: 0.8rem; margin-top: 0.2rem;">50%</div>
                 </div>
@@ -158,28 +315,45 @@
                 <div class="card-title">Risk Sniper Settings</div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;">
                     <div class="input-group"><label>Leverage</label><input type="number" id="cfgLev" value="20"></div>
-                    <div class="input-group"><label>Stop Loss %</label><input type="number" id="cfgSL" value="1.5" step="0.1"></div>
-                    <div class="input-group"><label>Take Profit %</label><input type="number" id="cfgTP" value="0.75" step="0.05"></div>
-                    <div class="input-group"><label>Daily Loss $</label><input type="number" id="cfgDLL" value="200"></div>
-                    <div class="input-group"><label>Dynamic Mode</label>
-                        <select id="cfgDynamic"><option value="true">ENABLE (%)</option><option value="false">DISABLE</option></select>
+                    <div class="input-group"><label>Stop Loss %</label><input type="number" id="cfgSL" value="1.5"
+                            step="0.1"></div>
+                    <div class="input-group"><label>Take Profit %</label><input type="number" id="cfgTP" value="0.75"
+                            step="0.05"></div>
+                    <div class="input-group"><label>Daily Loss $</label><input type="number" id="cfgDLL" value="200">
                     </div>
-                    <div class="input-group"><label>Risk Per Trade</label><input type="number" id="cfgRiskPct" value="50"></div>
+                    <div class="input-group"><label>Dynamic Mode</label>
+                        <select id="cfgDynamic">
+                            <option value="true">ENABLE (%)</option>
+                            <option value="false">DISABLE</option>
+                        </select>
+                    </div>
+                    <div class="input-group"><label>Risk Per Trade</label><input type="number" id="cfgRiskPct"
+                            value="50"></div>
                     <div class="input-group"><label>DCA Recovery</label>
-                        <select id="cfgDCA"><option value="false">OFF</option><option value="true">ON</option></select>
+                        <select id="cfgDCA">
+                            <option value="false">OFF</option>
+                            <option value="true">ON</option>
+                        </select>
                     </div>
                     <div class="input-group"><label>Trailing SL</label>
-                        <select id="cfgTrailing"><option value="true">ON</option><option value="false">OFF</option></select>
+                        <select id="cfgTrailing">
+                            <option value="true">ON</option>
+                            <option value="false">OFF</option>
+                        </select>
                     </div>
                 </div>
-                <button id="saveBtn" class="btn btn-save" style="width: 100%; margin-top: 1rem; background: var(--primary); color: white;">Save Configuration</button>
-                <button id="resetBtn" class="btn btn-start" style="width: 100%; margin-top: 0.5rem; background: #374151;">Reset Daily PnL Counter</button>
+                <button id="saveBtn" class="btn btn-save"
+                    style="width: 100%; margin-top: 1rem; background: var(--primary); color: white;">Save
+                    Configuration</button>
+                <button id="resetBtn" class="btn btn-start"
+                    style="width: 100%; margin-top: 0.5rem; background: #374151;">Reset Daily PnL Counter</button>
             </div>
 
             <!-- Column 3: Live System Logs -->
             <div class="card" style="margin-bottom: 0; display: flex; flex-direction: column;">
                 <div class="card-title">System Status Logs</div>
-                <div id="logsContainer" class="logs-container" style="flex-grow: 1; overflow-y: auto; font-size: 0.75rem; max-height: 380px;">
+                <div id="logsContainer" class="logs-container"
+                    style="flex-grow: 1; overflow-y: auto; font-size: 0.75rem; max-height: 380px;">
                     <!-- Logs here -->
                 </div>
             </div>
@@ -192,7 +366,13 @@
                 <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
                     <thead>
                         <tr style="text-align: left; color: #94a3b8; border-bottom: 1px solid #374151;">
-                            <th style="padding: 0.5rem;">Time</th><th>Pair</th><th>Side</th><th>Lev</th><th>Qty</th><th>Entry</th><th>PnL</th>
+                            <th style="padding: 0.5rem;">Time</th>
+                            <th>Pair</th>
+                            <th>Side</th>
+                            <th>Lev</th>
+                            <th>Qty</th>
+                            <th>Entry</th>
+                            <th>PnL</th>
                         </tr>
                     </thead>
                     <tbody id="tradeBody"></tbody>
@@ -221,24 +401,24 @@
         function drawChart() {
             if (priceData.length < 2) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
+
             const min = Math.min(...priceData);
             const max = Math.max(...priceData);
             const range = max - min || 1;
-            
+
             ctx.beginPath();
             ctx.strokeStyle = '#3b82f6';
             ctx.lineWidth = 2;
-            
+
             const stepX = canvas.width / (maxPoints - 1);
-            
+
             priceData.forEach((p, i) => {
                 const x = i * stepX;
                 const y = canvas.height - ((p - min) / range * (canvas.height - 40) + 20);
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             });
-            
+
             ctx.stroke();
 
             // Gradient
@@ -258,9 +438,9 @@
             const host = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
             const wsUrl = `ws://${host}:${window.location.port}/ws/price`;
             console.log("Attempting WS connection to:", wsUrl);
-            
+
             const ws = new WebSocket(wsUrl);
-            
+
             ws.onopen = () => {
                 console.log("SUCCESS: Socket Connected!");
                 document.getElementById('botStatus').innerText = "LIVE DATA ACTIVE";
@@ -271,7 +451,7 @@
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                
+
                 // Fetch the active symbols to know what to display
                 const symbolsInput = document.getElementById('cfgSymbols').value;
                 const mainSymbol = symbolsInput.split(',')[0].trim().toUpperCase();
@@ -283,9 +463,9 @@
                     document.getElementById('livePrice').style.color = "#60a5fa"; // Active Blue
                 }
             };
-            
+
             ws.onerror = () => ws.close();
-            
+
             ws.onclose = () => {
                 console.log("Socket Closed. Starting Fallback Polling...");
                 if (!pollInterval) {
@@ -299,7 +479,7 @@
                                 updateChart(data.price);
                                 document.getElementById('livePrice').innerText = `$${data.price.toFixed(4)} (Rest Mode)`;
                             }
-                        } catch(e) {}
+                        } catch (e) { }
                     }, 1500);
                 }
                 setTimeout(connectWS, 5000);
@@ -367,7 +547,7 @@
         };
 
         document.getElementById('resetBtn').onclick = async () => {
-            if(!confirm('Reset Daily PnL Counter?')) return;
+            if (!confirm('Reset Daily PnL Counter?')) return;
             await fetch('/api/bot/reset_pnl', { method: 'POST' });
             alert('Reset Successful!');
             updateData();
@@ -392,7 +572,7 @@
                 document.getElementById('statPnL').innerText = data.total_pnl;
                 document.getElementById('statWinRate').innerText = data.win_rate;
                 document.getElementById('statTrades').innerText = data.total_trades;
-                
+
                 // Update AI Confidence Bar
                 document.getElementById('confBar').style.width = data.latest_confidence + '%';
                 document.getElementById('confVal').innerText = data.latest_confidence + '%';
@@ -439,7 +619,7 @@
                 body: JSON.stringify(data)
             });
             const result = await res.json();
-            if(result.message) alert('Configuration Saved to Database!');
+            if (result.message) alert('Configuration Saved to Database!');
             else alert('Error: ' + result.error);
         };
 
@@ -451,4 +631,5 @@
         updateData();
     </script>
 </body>
+
 </html>
