@@ -377,6 +377,7 @@
                             <th>TP</th>
                             <th>SL</th>
                             <th>PnL</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="tradeBody"></tbody>
@@ -511,6 +512,8 @@
                     const row = document.createElement('tr');
                     const pnlClass = t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
                     const time = t.entry_time ? new Date(t.entry_time).toLocaleTimeString() : '---';
+                    const isOpen = t.status === 'OPEN';
+                    
                     row.innerHTML = `
                         <td style="padding: 0.5rem;">${time}</td>
                         <td style="font-weight: bold;">${t.symbol}</td>
@@ -518,9 +521,16 @@
                         <td>${t.leverage}x</td>
                         <td>${t.quantity}</td>
                         <td>$${t.entry_price.toFixed(t.entry_price < 1 ? 4 : 2)}</td>
-                        <td style="color: var(--success); opacity: 0.8;">$${t.tp_price ? t.tp_price.toFixed(t.tp_price < 1 ? 4 : 2) : '---'}</td>
-                        <td style="color: var(--danger); opacity: 0.8;">$${t.sl_price ? t.sl_price.toFixed(t.sl_price < 1 ? 4 : 2) : '---'}</td>
-                        <td class="${pnlClass}">${t.pnl.toFixed(2)}</td>
+                        <td>
+                            ${isOpen ? `<input type="number" id="tp_${t.id}" value="${t.tp_price}" step="0.0001" style="width: 80px; padding: 2px; font-size: 0.8rem; background: #0f172a; border: 1px solid #334155; color: var(--success);">` : `$${t.tp_price ? t.tp_price.toFixed(t.tp_price < 1 ? 4 : 2) : '---'}`}
+                        </td>
+                        <td>
+                            ${isOpen ? `<input type="number" id="sl_${t.id}" value="${t.sl_price}" step="0.0001" style="width: 80px; padding: 2px; font-size: 0.8rem; background: #0f172a; border: 1px solid #334155; color: var(--danger);">` : `$${t.sl_price ? t.sl_price.toFixed(t.sl_price < 1 ? 4 : 2) : '---'}`}
+                        </td>
+                        <td class="${pnlClass}">${t.pnl ? t.pnl.toFixed(2) : '0.00'}</td>
+                        <td>
+                            ${isOpen ? `<button onclick="updateProtection(${t.id})" class="btn" style="padding: 2px 8px; font-size: 0.7rem; background: var(--primary);">Sync</button>` : '<span style="color: var(--text-dim); font-size: 0.7rem;">Fixed</span>'}
+                        </td>
                     `;
                     tradeBody.appendChild(row);
                 });
@@ -642,6 +652,22 @@
         initChart();
         connectWS();
         window.onresize = initChart;
+
+        async function updateProtection(tradeId) {
+            const tp = document.getElementById(`tp_${tradeId}`).value;
+            const sl = document.getElementById(`sl_${tradeId}`).value;
+            const res = await fetch(`/api/trades/${tradeId}/protection`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tp_price: tp, sl_price: sl })
+            });
+            const result = await res.json();
+            if (result.message) alert(result.message);
+            else alert('Error: ' + result.error);
+            updateData();
+        }
+
+        // Init
         loadConfig();
         updateData();
     </script>
