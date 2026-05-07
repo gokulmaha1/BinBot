@@ -404,7 +404,9 @@ async def bot_loop():
                         is_buy = any_open.side == "BUY"
                         # Entry + 0.1% to cover 0.05% entry + 0.05% exit fees
                         safe_sl = any_open.entry_price * (1.001 if is_buy else 0.999)
-                        await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, cfg.take_profit, 0, absolute_sl=safe_sl)
+                        # Correct: Use ROI-to-Price conversion for dynamic update
+                        tp_p_pct = cfg.take_profit / any_open.leverage
+                        await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, tp_p_pct, 0, absolute_sl=safe_sl)
                         db = SessionLocal()
                         t = db.query(Trade).filter(Trade.id == any_open.id).first()
                         t.fee = 2 # Fortress Protected
@@ -413,7 +415,8 @@ async def bot_loop():
                     # TIER 1: BREAK-EVEN LOCK (+0.4% move)
                     elif pnl_pct > 0.4 and any_open.fee < 5:
                         log(f"SMART SHIELD: Moving SL to BREAK-EVEN for {any_open.symbol}.", "warning")
-                        await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, cfg.take_profit, 0, absolute_sl=any_open.entry_price)
+                        tp_p_pct = cfg.take_profit / any_open.leverage
+                        await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, tp_p_pct, 0, absolute_sl=any_open.entry_price)
                         db = SessionLocal()
                         t = db.query(Trade).filter(Trade.id == any_open.id).first()
                         t.fee = 5 # BE Protected
@@ -425,7 +428,8 @@ async def bot_loop():
                         is_buy = any_open.side == "BUY"
                         lock_price = any_open.entry_price * (1.005 if is_buy else 0.995)
                         log(f"MOONSHOT LOCK: Protecting +0.5% profit on {any_open.side} for {any_open.symbol}.", "success")
-                        await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, cfg.take_profit + 0.01, 0, absolute_sl=lock_price)
+                        tp_p_pct = (cfg.take_profit / any_open.leverage) + 0.01 # Extend TP slightly
+                        await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, tp_p_pct, 0, absolute_sl=lock_price)
                         db = SessionLocal()
                         t = db.query(Trade).filter(Trade.id == any_open.id).first()
                         t.fee = 10 # Tier 2 Protected
@@ -433,20 +437,23 @@ async def bot_loop():
 
                     # TIER 3: TP EXTENSION (Catching the Spike/Dump)
                     # If we are close to TP and momentum is still accelerating, PUSH TP!
-                    if pnl_pct > (cfg.take_profit * 100 - 0.2) and abs(mom_30s) > 0.005:
-                        new_tp = cfg.take_profit + 0.015 # Push TP by another 1.5%
-                        log(f"MOMENTUM SNIPER: Extending TP to {new_tp*100:.1f}% to ride the {'PUMP' if pnl_pct > 0 else 'DUMP'}!", "success")
-                        await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, new_tp, cfg.stop_loss)
+                    # pnl_pct is price %, so we compare to ROI/leverage
+                    tp_threshold = (cfg.take_profit / any_open.leverage) - 0.002 # 0.2% price move before TP
+                    if pnl_pct > tp_threshold and abs(mom_30s) > 0.005:
+                        new_tp_p_pct = (cfg.take_profit / any_open.leverage) + 0.015 # Push TP by another 1.5%
+                        sl_p_pct = cfg.stop_loss / any_open.leverage
+                        log(f"MOMENTUM SNIPER: Extending TP to ride the trend!", "success")
+                        await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, new_tp_p_pct, sl_p_pct)
 
                 # B. TIME-BASED ESCAPE (Reduce Opportunity Loss)
-                elif cfg.trailing_sl_enabled and duration_mins > 5 and 0.1 < pnl_pct < cfg.take_profit * 100 and any_open.fee < 20:
+                elif cfg.trailing_sl_enabled and duration_mins > 5 and 0.1 < pnl_pct < (cfg.take_profit / any_open.leverage) and any_open.fee < 20:
                     log(f"TIME ESCAPE: Trade is slow ({duration_mins:.1f}m). Reducing TP to 0.2% for quick exit.", "warning")
-                    await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, 0.002, cfg.stop_loss)
+                    sl_p_pct = cfg.stop_loss / any_open.leverage
+                    await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, 0.002, sl_p_pct)
                     db = SessionLocal()
                     t = db.query(Trade).filter(Trade.id == any_open.id).first()
                     t.fee = 20 # Mark as Time-Exited
-                    db.commit()
-                    db.close()
+                    db.commit(); db.close()
 
                 # C. LOGGING STATUS (Periodic)
                 if int(now.second) % 30 < 5: # Log every 30s approx
