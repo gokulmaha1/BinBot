@@ -281,6 +281,7 @@ async def bot_loop():
     
     while bot_running:
         try:
+            now = datetime.now(IST)
             # 1. IRON SHIELD: Global Daily Loss Limit Check
             db = SessionLocal()
             cfg = db.query(Config).first()
@@ -400,7 +401,6 @@ async def bot_loop():
                         log(f"RECOVERY FAILED: {error}", "error")
 
                 # 6. DYNAMIC SMART MANAGEMENT (Shield System)
-                now = datetime.now(IST)
                 duration_mins = (now - any_open.entry_time.replace(tzinfo=IST)).total_seconds() / 60
                 
                 if cfg.trailing_sl_enabled:
@@ -513,6 +513,9 @@ async def bot_loop():
                     klines_5m = await asyncio.to_thread(client.futures_klines, symbol=symbol, interval='5m', limit=200)
                     klines_15m = await asyncio.to_thread(client.futures_klines, symbol=symbol, interval='15m', limit=200)
                     
+                    if not klines_1m or not klines_5m:
+                        continue
+
                     df = pd.DataFrame(klines_1m, columns=['time','open','high','low','close','vol','ct','qv','nt','tb','tv','ig'])
                     df_5m = pd.DataFrame(klines_5m, columns=['time','open','high','low','close','vol','ct','qv','nt','tb','tv','ig'])
                     df_15m = pd.DataFrame(klines_15m, columns=['time','open','high','low','close','vol','ct','qv','nt','tb','tv','ig'])
