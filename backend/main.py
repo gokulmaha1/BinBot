@@ -859,8 +859,8 @@ async def bot_loop():
                             
                             results, error, final_tp, final_sl = result
                             
-                            if result and result[0]:
-                                entry_data = result[0]
+                            if results and len(results) > 0 and results[0]:
+                                entry_data = results[0]
                                 # Extract actual fill price from Binance result
                                 actual_entry = float(entry_data.get('avgPrice', curr_price))
                                 if actual_entry == 0: # Fallback for some API versions
