@@ -506,6 +506,8 @@ async def bot_loop():
 
             # 4. TRIPLE SNIPE: Loop through Dynamic Watchlist
             WATCHLIST = cfg.symbols.split(',')
+            if int(now.second) % 30 < 2:
+                log(f"HEARTBEAT: Scanning {len(WATCHLIST)} assets...", "info")
             for symbol in WATCHLIST:
                 symbol = symbol.strip()
                 if not symbol: continue
@@ -531,12 +533,22 @@ async def bot_loop():
 
 
                     
-                    # 4. Fetch Technical Data (1m, 5m, 15m) — PARALLEL
-                    klines_1m, klines_5m, klines_15m = await asyncio.gather(
-                        asyncio.to_thread(client.futures_klines, symbol=symbol, interval='1m', limit=200),
-                        asyncio.to_thread(client.futures_klines, symbol=symbol, interval='5m', limit=200),
-                        asyncio.to_thread(client.futures_klines, symbol=symbol, interval='15m', limit=200),
-                    )
+                    # 4. Fetch Technical Data (1m, 5m, 15m) — PARALLEL with TIMEOUT
+                    try:
+                        klines_1m, klines_5m, klines_15m = await asyncio.wait_for(
+                            asyncio.gather(
+                                asyncio.to_thread(client.futures_klines, symbol=symbol, interval='1m', limit=200),
+                                asyncio.to_thread(client.futures_klines, symbol=symbol, interval='5m', limit=200),
+                                asyncio.to_thread(client.futures_klines, symbol=symbol, interval='15m', limit=200),
+                            ),
+                            timeout=15.0
+                        )
+                    except asyncio.TimeoutError:
+                        log(f"TIMEOUT: {symbol} klines fetch took >15s. Skipping.", "warning")
+                        continue
+                    except Exception as e:
+                        log(f"DATA ERROR ({symbol}): {e}", "error")
+                        continue
                     
                     if not klines_1m or not klines_5m:
                         continue
