@@ -210,43 +210,47 @@ def get_price():
     return {"price": LATEST_PRICES.get("LABUSDT", 0.0)}
 
 async def start_socket_feed():
-    """Ultra-High Speed Trade Stream with REST Fallback"""
+    """Dynamic Multiplex Socket Feed for Watchlist"""
     while True:
         client = None
         try:
-            log("SOCKET: Connecting to High-Speed Trade Stream (LABUSDT)...", "info")
+            db = SessionLocal()
+            cfg = db.query(Config).first()
+            db.close()
+            
+            # 1. Prepare symbols for socket
+            watchlist = [s.strip().lower() for s in cfg.symbols.split(',') if s.strip()]
+            if not watchlist: watchlist = ['labusdt']
+            
+            log(f"SOCKET: Connecting to Multi-Stream ({', '.join(watchlist)})...", "info")
             client = await AsyncClient.create(config.API_KEY, config.API_SECRET)
             bm = BinanceSocketManager(client)
-            # Use AggTrade for millisecond-level precision
-            ts = bm.aggtrade_socket('labusdt')
             
-            async with ts as tscm:
-                log("SOCKET: Connected to Trade Stream.", "success")
+            # Combine all symbols into a single multiplex stream
+            streams = [f"{s}@aggTrade" for s in watchlist]
+            ms = bm.multiplex_socket(streams)
+            
+            async with ms as mscm:
+                log(f"SOCKET: Multi-Stream Active for {len(watchlist)} assets.", "success")
                 while True:
-                    res = await tscm.recv()
-                    if res and 'p' in res:
-                        price = float(res['p'])
-                        LATEST_PRICES['LABUSDT'] = price
-                        # log(f"STREAM DATA: {price}", "info") # Debug
-                        # Broadcast to UI clients
-                        msg = json.dumps({"symbol": "LABUSDT", "price": price})
+                    res = await mscm.recv()
+                    if res and 'data' in res:
+                        data = res['data']
+                        symbol = res['stream'].split('@')[0].upper()
+                        price = float(data['p'])
+                        LATEST_PRICES[symbol] = price
+                        
+                        # Broadcast to UI
+                        msg = json.dumps({"symbol": symbol, "price": price})
                         for client_ws in connected_clients:
-                            try:
-                                await client_ws.send_text(msg)
-                            except:
-                                pass
+                            try: await client_ws.send_text(msg)
+                            except: pass
         except Exception as e:
-            log(f"SOCKET ALERT: {e}. Switching to REST polling...", "error")
-            try:
-                if not client: client = await AsyncClient.create(config.API_KEY, config.API_SECRET)
-                ticker = await asyncio.to_thread(client.futures_symbol_ticker, symbol="LABUSDT")
-                LATEST_PRICES['LABUSDT'] = float(ticker['price'])
-            except: pass
-            await asyncio.sleep(5)
+            log(f"SOCKET ALERT: {e}. Retrying in 10s...", "error")
+            await asyncio.sleep(10)
             if client:
                 try: await client.close_connection()
                 except: pass
-            await asyncio.sleep(5)
 
 async def bot_loop():
     global bot_running

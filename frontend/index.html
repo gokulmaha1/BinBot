@@ -266,12 +266,16 @@
             };
 
             ws.onmessage = (event) => {
-                console.log("Raw WS Message:", event.data);
                 const data = JSON.parse(event.data);
-                console.log("DATA RECEIVED:", data);
-                if (data.symbol === "LABUSDT") {
+                
+                // Fetch the active symbols to know what to display
+                const symbolsInput = document.getElementById('cfgSymbols').value;
+                const mainSymbol = symbolsInput.split(',')[0].trim().toUpperCase() || "LABUSDT";
+
+                if (data.symbol === mainSymbol) {
                     updateChart(data.price);
                     document.getElementById('livePrice').innerText = `$${data.price.toFixed(4)}`;
+                    document.getElementById('livePrice').style.color = "#60a5fa"; // Active Blue
                 }
             };
             
