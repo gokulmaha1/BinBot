@@ -497,7 +497,8 @@ async def bot_loop():
                     await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, cfg.take_profit, cfg.stop_loss)
                 
                 # 5. IRON SHIELD: TRAILING TAKE PROFIT (TTP)
-                profit_pct = (curr_p - any_open.entry_price) / any_open.entry_price if any_open.side == "BUY" else (any_open.entry_price - curr_p) / any_open.entry_price
+                safe_entry = any_open.entry_price if any_open.entry_price > 0 else curr_p
+                profit_pct = (curr_p - safe_entry) / safe_entry if any_open.side == "BUY" else (safe_entry - curr_p) / safe_entry
                 
                 # Update Peak Price
                 if any_open.peak_price is None:
@@ -871,9 +872,11 @@ async def bot_loop():
                             if results and len(results) > 0 and results[0]:
                                 entry_data = results[0]
                                 # Extract actual fill price from Binance result
-                                actual_entry = float(entry_data.get('avgPrice', curr_price))
+                                actual_entry = float(entry_data.get('avgPrice', 0))
                                 if actual_entry == 0: # Fallback for some API versions
-                                    actual_entry = float(entry_data.get('price', curr_price))
+                                    actual_entry = float(entry_data.get('price', 0))
+                                if actual_entry == 0: # For MARKET orders, 'price' is 0
+                                    actual_entry = curr_price
                                 
                                 # Record in Database with ACTUAL price
                                 new_trade = Trade(
