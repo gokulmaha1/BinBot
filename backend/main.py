@@ -122,7 +122,8 @@ async def get_config(request: Request):
         "dynamic_risk_pct": cfg.dynamic_risk_pct,
         "dca": cfg.dca_enabled,
         "trailing_sl": cfg.trailing_sl_enabled,
-        "symbols": cfg.symbols
+        "symbols": cfg.symbols,
+        "use_testnet": cfg.use_testnet
     }
 
 @app.post("/api/config/update")
@@ -140,6 +141,7 @@ async def update_config(data: dict, request: Request):
         cfg.dca_enabled = str(data.get("dca")).lower() == "true"
         cfg.trailing_sl_enabled = str(data.get("trailing_sl")).lower() == "true"
         cfg.symbols = data.get("symbols", cfg.symbols)
+        cfg.use_testnet = str(data.get("use_testnet", "true")).lower() == "true"
         db.commit()
         return {"message": "Config updated successfully"}
     except Exception as e:
@@ -234,7 +236,7 @@ async def start_socket_feed():
                 db2.close()
             
             log(f"SOCKET: Connecting to Multi-Stream ({', '.join(watchlist)})...", "info")
-            client = await AsyncClient.create(config.API_KEY, config.API_SECRET, testnet=config.USE_TESTNET)
+            client = await AsyncClient.create(config.API_KEY, config.API_SECRET, testnet=cfg.use_testnet)
             bm = BinanceSocketManager(client)
             
             # Combine all symbols into a single multiplex stream
@@ -269,8 +271,14 @@ async def bot_loop():
     
     # Binance Client
     try:
-        client = Client(config.API_KEY, config.API_SECRET, testnet=config.USE_TESTNET)
-        log(f"Binance Client Initialized Successfully ({'TESTNET' if config.USE_TESTNET else 'LIVE'})", "info")
+        # Read testnet setting from DB
+        _db = SessionLocal()
+        _cfg = _db.query(Config).first()
+        _use_testnet = _cfg.use_testnet if _cfg else True
+        _db.close()
+        
+        client = Client(config.API_KEY, config.API_SECRET, testnet=_use_testnet)
+        log(f"Binance Client Initialized Successfully ({'TESTNET' if _use_testnet else 'LIVE'})", "info")
     except Exception as e:
         log(f"Connection Failed: {e}", "error")
         bot_running = False

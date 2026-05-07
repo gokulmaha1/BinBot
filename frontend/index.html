@@ -167,6 +167,13 @@
                         <label>Watchlist (Comma Separated)</label>
                         <input type="text" id="cfgSymbols" placeholder="e.g. BTCUSDT,ETHUSDT,SOLUSDT">
                     </div>
+                    <div class="input-group" style="grid-column: span 2;">
+                        <label style="color: var(--warning);">⚡ Network Mode (Restart Required)</label>
+                        <select id="cfgTestnet" style="border-color: var(--warning);">
+                            <option value="true">TESTNET (Simulation)</option>
+                            <option value="false">LIVE (Real Money)</option>
+                        </select>
+                    </div>
                 </div>
                 <button id="saveBtn" class="btn btn-save" style="width: 100%; margin-top: 1rem; background: var(--primary); color: white;">Save Configuration</button>
                 <button id="resetBtn" class="btn btn-start" style="width: 100%; margin-top: 0.5rem; background: #374151;">Reset Daily PnL Counter</button>
@@ -408,6 +415,7 @@
                 document.getElementById('cfgDCA').value = cfg.dca.toString();
                 document.getElementById('cfgTrailing').value = cfg.trailing_sl.toString();
                 document.getElementById('cfgSymbols').value = cfg.symbols;
+                document.getElementById('cfgTestnet').value = cfg.use_testnet.toString();
             } catch (e) { console.error('Config Load Error', e); }
         }
 
@@ -421,7 +429,8 @@
                 dynamic_risk_pct: document.getElementById('cfgRiskPct').value,
                 dca: document.getElementById('cfgDCA').value,
                 trailing_sl: document.getElementById('cfgTrailing').value,
-                symbols: document.getElementById('cfgSymbols').value
+                symbols: document.getElementById('cfgSymbols').value,
+                use_testnet: document.getElementById('cfgTestnet').value
             };
             const res = await fetch('/api/config/update', {
                 method: 'POST',

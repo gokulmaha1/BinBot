@@ -69,6 +69,7 @@ class Config(Base):
     dca_enabled = Column(Boolean, default=False)
     trailing_sl_enabled = Column(Boolean, default=True)
     symbols = Column(String, default="LABUSDT,PEPEUSDT,DOGSUSDT")
+    use_testnet = Column(Boolean, default=True)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
