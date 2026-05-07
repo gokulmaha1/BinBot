@@ -27,6 +27,8 @@ STOP_LOSS = 0.015      # 1.5% price move = 30% Loss (Tight)
 DAILY_LOSS_LIMIT = 200.0
 DCA = True             # Enable/Disable Averaging Down
 TRAILING_STOP_LOSS = True # Enable/Disable Profit Locking Levels
+TRAILING_TP_ACTIVATION = 0.01 # 1.0% profit to start trailing
+TRAILING_TP_CALLBACK = 0.002  # 0.2% callback from peak
 
 
 # Technical Indicators

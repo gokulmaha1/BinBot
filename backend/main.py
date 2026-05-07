@@ -122,6 +122,8 @@ async def get_config(request: Request):
         "dynamic_risk_pct": cfg.dynamic_risk_pct,
         "dca": cfg.dca_enabled,
         "trailing_sl": cfg.trailing_sl_enabled,
+        "trailing_tp_activation": cfg.trailing_tp_activation,
+        "trailing_tp_callback": cfg.trailing_tp_callback,
         "symbols": cfg.symbols,
         "use_testnet": cfg.use_testnet
     }
@@ -140,6 +142,8 @@ async def update_config(data: dict, request: Request):
         cfg.dynamic_risk_pct = float(data.get("dynamic_risk_pct", 0.50))
         cfg.dca_enabled = str(data.get("dca")).lower() == "true"
         cfg.trailing_sl_enabled = str(data.get("trailing_sl")).lower() == "true"
+        cfg.trailing_tp_activation = float(data.get("trailing_tp_activation", 0.01))
+        cfg.trailing_tp_callback = float(data.get("trailing_tp_callback", 0.002))
         cfg.symbols = data.get("symbols", cfg.symbols)
         cfg.use_testnet = str(data.get("use_testnet", "true")).lower() == "true"
         db.commit()
@@ -154,6 +158,19 @@ async def update_config(data: dict, request: Request):
 def get_logs(request: Request, db: Session = Depends(get_db)):
     if not is_authenticated(request): raise HTTPException(status_code=401)
     return db.query(LogEntry).order_by(LogEntry.timestamp.desc()).limit(200).all()
+
+@app.get("/api/trades")
+def get_trades(request: Request, db: Session = Depends(get_db)):
+    if not is_authenticated(request): raise HTTPException(status_code=401)
+    trades = db.query(Trade).order_by(Trade.entry_time.desc()).limit(50).all()
+    # Explicitly include new fields
+    return [{
+        "id": t.id, "symbol": t.symbol, "side": t.side, "leverage": t.leverage,
+        "entry_price": t.entry_price, "exit_price": t.exit_price,
+        "tp_price": t.tp_price, "sl_price": t.sl_price,
+        "quantity": t.quantity, "pnl": t.pnl, "status": t.status,
+        "entry_time": t.entry_time.isoformat() if t.entry_time else None
+    } for t in trades]
 
 @app.get("/api/stats")
 def get_stats(request: Request, db: Session = Depends(get_db)):
@@ -398,7 +415,41 @@ async def bot_loop():
                         current_qty = float(p['positionAmt'])
                         break
                 
-                # 4. If position is ZERO, it was closed by TP/SL
+                # 4. IRON SHIELD: TRAILING TAKE PROFIT (TTP)
+                profit_pct = (curr_p - any_open.entry_price) / any_open.entry_price if any_open.side == "BUY" else (any_open.entry_price - curr_p) / any_open.entry_price
+                
+                # Update Peak Price
+                if any_open.peak_price is None:
+                    any_open.peak_price = curr_p
+                else:
+                    if any_open.side == "BUY":
+                        any_open.peak_price = max(any_open.peak_price, curr_p)
+                    else:
+                        any_open.peak_price = min(any_open.peak_price, curr_p)
+                
+                # Update Peak Price in DB
+                db_tmp = SessionLocal()
+                t_tmp = db_tmp.query(Trade).filter(Trade.id == any_open.id).first()
+                if t_tmp:
+                    t_tmp.peak_price = any_open.peak_price
+                    db_tmp.commit()
+                db_tmp.close()
+
+                # TTP Logic
+                if cfg.trailing_sl_enabled and profit_pct >= cfg.trailing_tp_activation:
+                    if any_open.side == "BUY":
+                        drawdown = (any_open.peak_price - curr_p) / any_open.peak_price
+                    else:
+                        drawdown = (curr_p - any_open.peak_price) / any_open.peak_price
+                    
+                    if drawdown >= cfg.trailing_tp_callback:
+                        log(f"TRAILING TAKE PROFIT: Callback hit for {any_open.symbol}. Closing at ${curr_p}...", "success")
+                        await asyncio.to_thread(client.futures_create_order,
+                            symbol=any_open.symbol, side="SELL" if any_open.side == "BUY" else "BUY",
+                            type='MARKET', quantity=abs(current_qty), reduceOnly=True
+                        )
+
+                # 5. If position is ZERO, it was closed by TP/SL
                 if abs(current_qty) < 0.00000001:
                     log(f"DETECTION: Position for {any_open.symbol} is CLOSED on Binance. Syncing DB...", "warning")
                     db = SessionLocal()
@@ -744,10 +795,10 @@ async def bot_loop():
                             )
                             
                             if result is None:
-                                log(f"EXECUTION FAILED: place_atomic_trade returned None for {symbol}. Check API keys.", "error")
+                                log(f"EXECUTION FAILED: place_atomic_trade returned None for {symbol}.", "error")
                                 continue
                             
-                            results, error = result
+                            results, error, final_tp, final_sl = result
                             
                             # Validate ALL 3 orders (Entry, TP, SL)
                             success_count = sum(1 for r in (results or []) if isinstance(r, dict) and 'orderId' in r)
@@ -777,8 +828,15 @@ async def bot_loop():
                             db = SessionLocal()
                             entry_fee = curr_price * qty * 0.0005
                             new_trade = Trade(
-                                symbol=symbol, side=signal, leverage=active_leverage,
-                                entry_price=curr_price, quantity=qty, fee=entry_fee, status="OPEN"
+                                symbol=symbol,
+                                side=signal,
+                                leverage=active_leverage,
+                                entry_price=curr_price,
+                                tp_price=final_tp,
+                                sl_price=final_sl,
+                                quantity=qty,
+                                fee=entry_fee,
+                                status="OPEN"
                             )
                             db.add(new_trade)
                             db.commit()

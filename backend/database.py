@@ -43,6 +43,9 @@ class Trade(Base):
     leverage = Column(Integer, default=5)
     entry_price = Column(Float)
     exit_price = Column(Float, nullable=True)
+    tp_price = Column(Float, nullable=True) # Target TP
+    sl_price = Column(Float, nullable=True) # Target SL
+    peak_price = Column(Float, nullable=True) # Highest price seen for trailing
     quantity = Column(Float)
     fee = Column(Float, default=0.0)
     pnl = Column(Float, default=0.0) # Net PnL after fees
@@ -68,6 +71,8 @@ class Config(Base):
     dynamic_risk_pct = Column(Float, default=0.50)
     dca_enabled = Column(Boolean, default=False)
     trailing_sl_enabled = Column(Boolean, default=True)
+    trailing_tp_activation = Column(Float, default=0.01) # 1.0% to start trailing
+    trailing_tp_callback = Column(Float, default=0.002)  # 0.2% pullback to close
     symbols = Column(String, default="LABUSDT,PEPEUSDT,DOGSUSDT")
     use_testnet = Column(Boolean, default=True)
 
