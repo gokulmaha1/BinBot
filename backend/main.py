@@ -11,6 +11,7 @@ import os
 import json
 import asyncio
 import pandas as pd
+from collections import defaultdict, deque
 
 # Internal Imports
 from backend.database import init_db, SessionLocal, Trade, LogEntry, Config
@@ -268,8 +269,7 @@ async def bot_loop():
 
     executor = ExecutionEngine(client)
     
-    SYMBOLS = ["LABUSDT"]
-    price_histories = {s: [] for s in SYMBOLS}
+    price_histories = defaultdict(lambda: deque(maxlen=300))
     consecutive_losses = 0
     cooldown_until = None
     
