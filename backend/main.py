@@ -693,11 +693,10 @@ async def bot_loop():
                     ref_price = history[-30] if len(history) >= 30 else history[0]
                     mom_30s = (curr_price - ref_price) / ref_price if ref_price > 0 else 0
                     
-                    # 5. Volatility Brake (Smart Chaos Filter)
-                    is_volatile = abs(mom_30s) > 0.015
-                    if abs(mom_30s) > 0.04: # Hard Stop for extreme chaos (Flash Crash)
-                        cooldown_until = datetime.now(IST) + timedelta(minutes=5)
-                        log(f"SHIELD: Extreme Chaos detected ({abs(mom_30s)*100:.2f}%). Emergency Pause.", "error")
+                    is_volatile = abs(mom_30s) > 0.02
+                    if abs(mom_30s) > 0.08: # Increased from 0.04 for high-volatility coins
+                        cooldown_until = datetime.now(IST) + timedelta(minutes=2)
+                        log(f"SHIELD: extreme Chaos detected ({abs(mom_30s)*100:.2f}%). Short pause.", "error")
                         break
                     
                     if is_volatile:
@@ -775,7 +774,8 @@ async def bot_loop():
                         elif is_high_conviction and cooldown_until and datetime.now(IST) < cooldown_until:
                             log(f"SNIPER BYPASS: High Conviction ({ai_report['confidence']*100}%) detected. Ignoring cooldown to strike!", "success")
 
-                        # 9. Final Validation & Strike
+                        # 9. Final Validation & Strike (AGGRESSIVE MODE)
+                        required_confidence = 0.50 # Lowered from 0.65 for faster entries
                         is_valid = ai_report['confidence'] >= required_confidence
                         
                         # Emergency Force-Valid for 90%+ (High Conviction)
