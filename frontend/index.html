@@ -163,8 +163,12 @@
                     <div class="input-group"><label>Trailing SL</label>
                         <select id="cfgTrailing"><option value="true">ON</option><option value="false">OFF</option></select>
                     </div>
+                    <div class="input-group" style="grid-column: span 2;">
+                        <label>Watchlist (Comma Separated)</label>
+                        <input type="text" id="cfgSymbols" placeholder="e.g. BTCUSDT,ETHUSDT,SOLUSDT">
+                    </div>
                 </div>
-                <button id="saveBtn" class="btn btn-save" style="width: 100%; margin-top: 1rem;">Save Configuration</button>
+                <button id="saveBtn" class="btn btn-save" style="width: 100%; margin-top: 1rem; background: var(--primary); color: white;">Save Configuration</button>
                 <button id="resetBtn" class="btn btn-start" style="width: 100%; margin-top: 0.5rem; background: #374151;">Reset Daily PnL Counter</button>
             </div>
 
@@ -396,6 +400,7 @@
                 document.getElementById('cfgRiskPct').value = cfg.dynamic_risk_pct;
                 document.getElementById('cfgDCA').value = cfg.dca.toString();
                 document.getElementById('cfgTrailing').value = cfg.trailing_sl.toString();
+                document.getElementById('cfgSymbols').value = cfg.symbols;
             } catch (e) { console.error('Config Load Error', e); }
         }
 
@@ -408,7 +413,8 @@
                 use_dynamic: document.getElementById('cfgDynamic').value,
                 dynamic_risk_pct: document.getElementById('cfgRiskPct').value,
                 dca: document.getElementById('cfgDCA').value,
-                trailing_sl: document.getElementById('cfgTrailing').value
+                trailing_sl: document.getElementById('cfgTrailing').value,
+                symbols: document.getElementById('cfgSymbols').value
             };
             const res = await fetch('/api/config/update', {
                 method: 'POST',

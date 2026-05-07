@@ -119,7 +119,8 @@ async def get_config(request: Request):
         "use_dynamic": cfg.use_dynamic,
         "dynamic_risk_pct": cfg.dynamic_risk_pct,
         "dca": cfg.dca_enabled,
-        "trailing_sl": cfg.trailing_sl_enabled
+        "trailing_sl": cfg.trailing_sl_enabled,
+        "symbols": cfg.symbols
     }
 
 @app.post("/api/config/update")
@@ -136,6 +137,7 @@ async def update_config(data: dict, request: Request):
         cfg.dynamic_risk_pct = float(data.get("dynamic_risk_pct", 0.50))
         cfg.dca_enabled = str(data.get("dca")).lower() == "true"
         cfg.trailing_sl_enabled = str(data.get("trailing_sl")).lower() == "true"
+        cfg.symbols = data.get("symbols", "LABUSDT")
         db.commit()
         return {"message": "Config updated successfully"}
     except Exception as e:
@@ -474,11 +476,16 @@ async def bot_loop():
                 elif len(losses) == 0: required_confidence = 0.55
 
 
-            # 4. TRIPLE SNIPE: Loop through Symbols
-            for symbol in SYMBOLS:
+            # 4. TRIPLE SNIPE: Loop through Dynamic Watchlist
+            WATCHLIST = cfg.symbols.split(',')
+            for symbol in WATCHLIST:
+                symbol = symbol.strip()
+                if not symbol: continue
+                
                 try:
                     # Fetch Data (High Speed WebSocket with REST Fallback)
                     curr_price = LATEST_PRICES.get(symbol, 0.0)
+                    # ...
                     if curr_price == 0:
                         ticker = await asyncio.to_thread(client.futures_symbol_ticker, symbol=symbol)
                         curr_price = float(ticker['price'])
