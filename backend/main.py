@@ -236,7 +236,9 @@ async def start_socket_feed():
                 db2.close()
             
             log(f"SOCKET: Connecting to Multi-Stream ({', '.join(watchlist)})...", "info")
-            client = await AsyncClient.create(config.API_KEY, config.API_SECRET, testnet=cfg.use_testnet)
+            _sk = config.TESTNET_API_KEY if cfg.use_testnet else config.LIVE_API_KEY
+            _ss = config.TESTNET_API_SECRET if cfg.use_testnet else config.LIVE_API_SECRET
+            client = await AsyncClient.create(_sk, _ss, testnet=cfg.use_testnet)
             bm = BinanceSocketManager(client)
             
             # Combine all symbols into a single multiplex stream
@@ -277,7 +279,21 @@ async def bot_loop():
         _use_testnet = _cfg.use_testnet if _cfg else True
         _db.close()
         
-        client = Client(config.API_KEY, config.API_SECRET, testnet=_use_testnet)
+        # Select the correct API keys based on network mode
+        if _use_testnet:
+            api_key = config.TESTNET_API_KEY
+            api_secret = config.TESTNET_API_SECRET
+        else:
+            api_key = config.LIVE_API_KEY
+            api_secret = config.LIVE_API_SECRET
+        
+        if not api_key or not api_secret:
+            mode = "TESTNET" if _use_testnet else "LIVE"
+            log(f"ERROR: {mode} API keys are empty! Please configure them in bot/config.py", "error")
+            bot_running = False
+            return
+        
+        client = Client(api_key, api_secret, testnet=_use_testnet)
         log(f"Binance Client Initialized Successfully ({'TESTNET' if _use_testnet else 'LIVE'})", "info")
     except Exception as e:
         log(f"Connection Failed: {e}", "error")

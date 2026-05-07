@@ -1,7 +1,17 @@
 # Binance API Credentials
-USE_TESTNET = True
-API_KEY = "t7y8juHl3ms517OTSkaSHkRcKwbxhbB0xcPdoIrwskhRxOQxOExG4uPqvUHwyZBr"
-API_SECRET = "zGHx5ceVrNii2PBLat4TdJr43M3aN1D255GgwqeHKtgxIA9IWmBOxpz2kqincomF"
+USE_TESTNET = True  # Overridden by DB setting at runtime
+
+# LIVE API Keys (Real Money)
+LIVE_API_KEY = "t7y8juHl3ms517OTSkaSHkRcKwbxhbB0xcPdoIrwskhRxOQxOExG4uPqvUHwyZBr"
+LIVE_API_SECRET = "zGHx5ceVrNii2PBLat4TdJr43M3aN1D255GgwqeHKtgxIA9IWmBOxpz2kqincomF"
+
+# TESTNET API Keys (Simulation) — Generate at https://testnet.binancefuture.com
+TESTNET_API_KEY = ""
+TESTNET_API_SECRET = ""
+
+# Auto-select based on mode (overridden at runtime by DB)
+API_KEY = TESTNET_API_KEY if USE_TESTNET else LIVE_API_KEY
+API_SECRET = TESTNET_API_SECRET if USE_TESTNET else LIVE_API_SECRET
 
 # Trading Settings
 # SYMBOL is now managed dynamically via the Dashboard Watchlist (DB-driven)
