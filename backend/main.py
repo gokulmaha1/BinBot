@@ -826,12 +826,23 @@ async def bot_loop():
                                 target_value = 5.0 * active_leverage
                                 raw_qty = target_value / curr_price
 
+                            import math
                             precision = executor.get_quantity_precision(symbol)
-                            qty = round(raw_qty, precision)
+                            # ALWAYS floor the quantity to avoid exceeding margin due to rounding up
+                            factor = 10 ** precision
+                            qty = math.floor(raw_qty * factor) / factor
+                            if precision == 0:
+                                qty = int(qty)
                             
                             if qty <= 0:
                                 log(f"Execution Failed: Calculated Qty is 0. Check Balance!", "error")
                                 continue
+
+                            # Sweep any ghost orders holding margin
+                            try:
+                                await asyncio.to_thread(client.futures_cancel_all_open_orders, symbol=symbol)
+                            except:
+                                pass
 
                             # 2. Execute TRIPLE-VERIFIED ATOMIC BATCH (ROI-BASED)
                             # Convert ROI % to Price % based on Leverage
