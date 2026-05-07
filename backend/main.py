@@ -491,12 +491,22 @@ async def bot_loop():
                     # Fetch Data (High Speed WebSocket with REST Fallback)
                     curr_price = LATEST_PRICES.get(symbol, 0.0)
                     if curr_price == 0:
-                        ticker = await asyncio.to_thread(client.futures_symbol_ticker, symbol=symbol)
-                        curr_price = float(ticker['price'])
+                        try:
+                            ticker = await asyncio.to_thread(client.futures_symbol_ticker, symbol=symbol)
+                            curr_price = float(ticker['price'])
+                            LATEST_PRICES[symbol] = curr_price # Seed the cache
+                        except:
+                            continue # Skip if completely unreachable
                     
                     history = price_histories[symbol]
                     history.append(curr_price)
-                    if len(history) > 30: history.pop(0)
+                    
+                    if len(history) < 20:
+                        if int(now.second) % 15 == 0:
+                            log(f"RADAR: Warming up {symbol} ({len(history)}/20 points)...", "info")
+                        continue
+
+                    df = pd.DataFrame(history, columns=['close'])
                     
                     # 4. Fetch Technical Data (1m, 5m, 15m)
                     klines_1m = await asyncio.to_thread(client.futures_klines, symbol=symbol, interval='1m', limit=200)
