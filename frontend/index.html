@@ -100,6 +100,75 @@
             justify-content: space-between;
         }
 
+        /* Tooltip CSS */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+            margin-left: 5px;
+            color: var(--text-dim);
+            font-size: 0.9em;
+            background: #334155;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            text-align: center;
+            line-height: 16px;
+            font-weight: bold;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 250px;
+            background-color: var(--bg);
+            color: var(--text);
+            text-align: left;
+            border-radius: 6px;
+            padding: 10px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 150%;
+            left: 50%;
+            margin-left: -125px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 0.75rem;
+            font-weight: normal;
+            border: 1px solid #475569;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+        }
+
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #475569 transparent transparent transparent;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        .tooltiptext strong {
+            color: var(--primary);
+            display: block;
+            margin-bottom: 4px;
+            font-size: 0.85rem;
+        }
+        .tooltiptext em {
+            color: var(--success);
+            font-style: normal;
+            display: block;
+            margin-top: 4px;
+        }
+        }
+
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -314,35 +383,75 @@
             <div class="card" style="margin-bottom: 0;">
                 <div class="card-title">Risk Sniper Settings</div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;">
-                    <div class="input-group"><label>Leverage</label><input type="number" id="cfgLev" value="20"></div>
-                    <div class="input-group"><label>Stop Loss %</label><input type="number" id="cfgSL" value="1.5"
-                            step="0.1"></div>
-                    <div class="input-group"><label>Take Profit %</label><input type="number" id="cfgTP" value="0.75"
-                            step="0.05"></div>
-                    <div class="input-group"><label>Daily Loss $</label><input type="number" id="cfgDLL" value="200">
+                    <div class="input-group">
+                        <label>Leverage
+                            <span class="tooltip">?<span class="tooltiptext"><strong>Leverage Multiplier</strong>The multiplier applied to your margin.<br><br><em>Ex: $10 margin at 20x Leverage = $200 position size. Higher leverage increases both profit and liquidation risk.</em></span></span>
+                        </label>
+                        <input type="number" id="cfgLev" value="20">
                     </div>
-                    <div class="input-group"><label>Dynamic Mode</label>
+                    <div class="input-group">
+                        <label>Stop Loss %
+                            <span class="tooltip">?<span class="tooltiptext"><strong>Hard Stop Loss</strong>The maximum % loss allowed on the total position size before the bot forcibly exits the trade.<br><br><em>Ex: At 1.5%, a $100 position will close if it loses $1.50.</em></span></span>
+                        </label>
+                        <input type="number" id="cfgSL" value="1.5" step="0.1">
+                    </div>
+                    <div class="input-group">
+                        <label>Take Profit %
+                            <span class="tooltip">?<span class="tooltiptext"><strong>Target Take Profit</strong>The baseline % profit target. If Trailing SL is OFF, the trade closes here. If ON, it acts as a baseline.<br><br><em>Ex: At 0.75%, the bot secures profit once the position gains that amount.</em></span></span>
+                        </label>
+                        <input type="number" id="cfgTP" value="0.75" step="0.05">
+                    </div>
+                    <div class="input-group">
+                        <label>Daily Loss $
+                            <span class="tooltip">?<span class="tooltiptext"><strong>Global Iron Shield</strong>The maximum absolute dollar amount your bot is allowed to lose in a single day. If hit, trading halts.<br><br><em>Ex: If set to $200, the bot stops trading until reset if daily PnL drops below -$200.</em></span></span>
+                        </label>
+                        <input type="number" id="cfgDLL" value="200">
+                    </div>
+                    <div class="input-group">
+                        <label>Dynamic Mode
+                            <span class="tooltip">?<span class="tooltiptext"><strong>Volatility Adjustment</strong>Allows the bot to automatically adjust Take Profit and Stop Loss levels based on current market volatility (ADX/Momentum).<br><br><em>Ex: In a wild market, the bot will widen the SL and TP to avoid being stopped out by random wicks.</em></span></span>
+                        </label>
                         <select id="cfgDynamic">
                             <option value="true">ENABLE (%)</option>
                             <option value="false">DISABLE</option>
                         </select>
                     </div>
-                    <div class="input-group"><label>Risk Per Trade</label><input type="number" id="cfgRiskPct"
-                            value="50"></div>
-                    <div class="input-group"><label>DCA Recovery</label>
+                    <div class="input-group">
+                        <label>Risk Per Trade
+                            <span class="tooltip">?<span class="tooltiptext"><strong>Margin Allocation (%)</strong>The percentage of your total available wallet balance to use for a single trade's margin.<br><br><em>Ex: 50% of a $10 wallet means the bot will use $5 margin per trade.</em></span></span>
+                        </label>
+                        <input type="number" id="cfgRiskPct" value="50">
+                    </div>
+                    <div class="input-group">
+                        <label>DCA Recovery
+                            <span class="tooltip">?<span class="tooltiptext"><strong>Dollar Cost Averaging</strong>If the trade goes negative (-0.6%), the bot will inject more funds to lower the average entry price, making it easier to break even.<br><br><em>Warning: Increases risk. Requires extra margin.</em></span></span>
+                        </label>
                         <select id="cfgDCA">
                             <option value="false">OFF</option>
                             <option value="true">ON</option>
                         </select>
                     </div>
-                    <div class="input-group"><label>Trailing SL</label>
+                    <div class="input-group">
+                        <label>Trailing SL
+                            <span class="tooltip">?<span class="tooltiptext"><strong>Smart Stop Loss</strong>Automatically moves your Stop Loss to Break-Even once a trade is in profit, then trails behind the price to lock in gains.<br><br><em>Ex: Locks in break-even at +5% ROI, preventing winning trades from turning into losses.</em></span></span>
+                        </label>
                         <select id="cfgTrailing">
                             <option value="true">ON</option>
                             <option value="false">OFF</option>
                         </select>
                     </div>
-                    <div class="input-group"><label>TTP Activate %</label><input type="number" id="cfgTTPAct" value="1.0" step="0.1"></div>
-                    <div class="input-group"><label>TTP Callback %</label><input type="number" id="cfgTTPCall" value="0.2" step="0.05"></div>
+                    <div class="input-group">
+                        <label>TTP Activate %
+                            <span class="tooltip">?<span class="tooltiptext"><strong>Trailing TP Trigger</strong>The profit % at which the Trailing Take Profit (TTP) system turns on.<br><br><em>Ex: At 1.0%, the bot will ignore standard Take Profits and instead wait for the price to peak and reverse before selling.</em></span></span>
+                        </label>
+                        <input type="number" id="cfgTTPAct" value="1.0" step="0.1">
+                    </div>
+                    <div class="input-group">
+                        <label>TTP Callback %
+                            <span class="tooltip">?<span class="tooltiptext"><strong>Trailing TP Callback</strong>Once TTP is active, the bot sells if the price drops by this percentage from its absolute peak.<br><br><em>Ex: Peak is +5%, Callback is 0.2%. Bot sells if profit drops to +4.8%, capturing the maximum possible gain.</em></span></span>
+                        </label>
+                        <input type="number" id="cfgTTPCall" value="0.2" step="0.05">
+                    </div>
                 </div>
                 <button id="saveBtn" class="btn btn-save"
                     style="width: 100%; margin-top: 1rem; background: var(--primary); color: white;">Save
