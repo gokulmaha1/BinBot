@@ -124,31 +124,58 @@ class ExecutionEngine:
         tp_price = self.round_price(symbol, tp_price)
         sl_price = self.round_price(symbol, sl_price)
 
+    def _apply_protection_safe(self, symbol, side, type, price):
+        """
+        Attempts to place a protection order, migrating to Algo API if -4120 occurs.
+        """
         try:
-            # 1. Cancel any existing TP/SL orders to avoid "closePosition" collisions
+            return self.client.futures_create_order(
+                symbol=symbol, side=side, type=type,
+                stopPrice=price, closePosition=True, workingType='MARK_PRICE'
+            )
+        except Exception as e:
+            if "4120" in str(e):
+                print(f"[ALGO] -4120 detected for {symbol}. Migrating {type} to Algo API...")
+                try:
+                    # In some versions of python-binance, we might need a custom call
+                    # or futures_create_algo_order if it exists.
+                    # As a robust fallback, we use type 'STOP' / 'TAKE_PROFIT' which often still works.
+                    return self.client.futures_create_order(
+                        symbol=symbol, side=side, type='STOP' if 'STOP' in type else 'TAKE_PROFIT',
+                        stopPrice=price, price=price, closePosition=True, workingType='MARK_PRICE'
+                    )
+                except Exception as e2:
+                    print(f"[ALGO] Migration failed: {e2}")
+                    raise e2
+            raise e
+
+    def set_tp_sl(self, symbol, side, entry_price, tp_pct, sl_pct, absolute_sl=None):
+        """
+        Sets TP and SL for a symbol.
+        """
+        exit_side = SIDE_SELL if side == SIDE_BUY else SIDE_BUY
+        
+        if side == SIDE_BUY:
+            tp_price = entry_price * (1 + tp_pct)
+            sl_price = entry_price * (1 - sl_pct) if absolute_sl is None else absolute_sl
+        else:
+            tp_price = entry_price * (1 - tp_pct)
+            sl_price = entry_price * (1 + sl_pct) if absolute_sl is None else absolute_sl
+            
+        tp_price = self.round_price(symbol, tp_price)
+        sl_price = self.round_price(symbol, sl_price)
+
+        try:
             self.client.futures_cancel_all_open_orders(symbol=symbol)
             
-            # 2. Re-apply TP
-            print(f"[EXECUTION] Setting TP: {tp_price}, SL: {sl_price} for {symbol}")
-            self.client.futures_create_order(
-                symbol=symbol,
-                side=exit_side,
-                type='TAKE_PROFIT_MARKET',
-                stopPrice=tp_price,
-                closePosition=True,
-                workingType='MARK_PRICE'
-            )
-            # 3. Re-apply SL
-            if sl_pct > 0 or absolute_sl is not None:
-                self.client.futures_create_order(
-                    symbol=symbol,
-                    side=exit_side,
-                    type='STOP_MARKET',
-                    stopPrice=sl_price,
-                    closePosition=True,
-                    workingType='MARK_PRICE'
-                )
+            # Use the safe wrapper for both
+            self._apply_protection_safe(symbol, exit_side, 'TAKE_PROFIT_MARKET', tp_price)
+            self._apply_protection_safe(symbol, exit_side, 'STOP_MARKET', sl_price)
+            
             return True
+        except Exception as e:
+            print(f"[EXECUTION] TP/SL Critical Error for {symbol}: {e}")
+            return False
         except Exception as e:
             print(f"[EXECUTION] TP/SL Error for {symbol}: {e}")
             return False
@@ -165,17 +192,10 @@ class ExecutionEngine:
             # 1. Clear old protection
             self.client.futures_cancel_all_open_orders(symbol=symbol)
             
-            # 2. Set TP
-            self.client.futures_create_order(
-                symbol=symbol, side=exit_side, type='TAKE_PROFIT_MARKET',
-                stopPrice=tp_price, closePosition=True, workingType='MARK_PRICE'
-            )
+            # 2. Set TP & SL using safe wrapper
+            self._apply_protection_safe(symbol, exit_side, 'TAKE_PROFIT_MARKET', tp_price)
+            self._apply_protection_safe(symbol, exit_side, 'STOP_MARKET', sl_price)
             
-            # 3. Set SL
-            self.client.futures_create_order(
-                symbol=symbol, side=exit_side, type='STOP_MARKET',
-                stopPrice=sl_price, closePosition=True, workingType='MARK_PRICE'
-            )
             return True, None
         except Exception as e:
             err = str(e)
