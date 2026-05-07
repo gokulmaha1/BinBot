@@ -450,17 +450,7 @@ async def bot_loop():
                 break
                 
             if any_open:
-                # 1. Fetch Current Price immediately for management logic
-                ticker = await asyncio.to_thread(client.futures_symbol_ticker, symbol=any_open.symbol)
-                curr_p = float(ticker['price'])
-
-                # 2. IRON SHIELD: Verification Check
-                is_sl_active = await asyncio.to_thread(executor.verify_sl_active, any_open.symbol)
-                if not is_sl_active:
-                    log(f"SHIELD: Re-applying protection for {any_open.symbol}...", "warning")
-                    await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, cfg.take_profit, cfg.stop_loss)
-
-                # 3. Check if position actually exists on Binance
+                # 1. Check if position actually exists on Binance
                 pos = await asyncio.to_thread(client.futures_position_information, symbol=any_open.symbol)
                 current_qty = 0
                 for p in pos:
@@ -468,41 +458,7 @@ async def bot_loop():
                         current_qty = float(p['positionAmt'])
                         break
                 
-                # 4. IRON SHIELD: TRAILING TAKE PROFIT (TTP)
-                profit_pct = (curr_p - any_open.entry_price) / any_open.entry_price if any_open.side == "BUY" else (any_open.entry_price - curr_p) / any_open.entry_price
-                
-                # Update Peak Price
-                if any_open.peak_price is None:
-                    any_open.peak_price = curr_p
-                else:
-                    if any_open.side == "BUY":
-                        any_open.peak_price = max(any_open.peak_price, curr_p)
-                    else:
-                        any_open.peak_price = min(any_open.peak_price, curr_p)
-                
-                # Update Peak Price in DB
-                db_tmp = SessionLocal()
-                t_tmp = db_tmp.query(Trade).filter(Trade.id == any_open.id).first()
-                if t_tmp:
-                    t_tmp.peak_price = any_open.peak_price
-                    db_tmp.commit()
-                db_tmp.close()
-
-                # TTP Logic
-                if cfg.trailing_sl_enabled and profit_pct >= cfg.trailing_tp_activation:
-                    if any_open.side == "BUY":
-                        drawdown = (any_open.peak_price - curr_p) / any_open.peak_price
-                    else:
-                        drawdown = (curr_p - any_open.peak_price) / any_open.peak_price
-                    
-                    if drawdown >= cfg.trailing_tp_callback:
-                        log(f"TRAILING TAKE PROFIT: Callback hit for {any_open.symbol}. Closing at ${curr_p}...", "success")
-                        await asyncio.to_thread(client.futures_create_order,
-                            symbol=any_open.symbol, side="SELL" if any_open.side == "BUY" else "BUY",
-                            type='MARKET', quantity=abs(current_qty), reduceOnly=True
-                        )
-
-                # 5. If position is ZERO, it was closed by TP/SL
+                # 2. If position is ZERO, it was closed by TP/SL or manual intervention
                 if abs(current_qty) < 0.00000001:
                     log(f"DETECTION: Position for {any_open.symbol} is CLOSED on Binance. Syncing DB...", "warning")
                     db = SessionLocal()
@@ -514,8 +470,7 @@ async def bot_loop():
                     try:
                         income = await asyncio.to_thread(client.futures_income_history, symbol=any_open.symbol, incomeType="REALIZED_PNL", limit=1)
                         if income: t.pnl = float(income[0]['income'])
-                    except: 
-                        pass
+                    except: pass
                     
                     # Update Cooldown Logic
                     if t.pnl and t.pnl < 0:
@@ -535,6 +490,52 @@ async def bot_loop():
                     db.close()
                     log(f"SUCCESS: Trade {any_open.id} marked as CLOSED. Returning to scan mode.", "warning")
                     continue
+
+                # 3. Fetch Current Price for management logic
+                ticker = await asyncio.to_thread(client.futures_symbol_ticker, symbol=any_open.symbol)
+                curr_p = float(ticker['price'])
+
+                # 4. IRON SHIELD: Verification Check (Only if open)
+                is_sl_active = await asyncio.to_thread(executor.verify_sl_active, any_open.symbol)
+                if not is_sl_active:
+                    log(f"SHIELD: Re-applying protection for {any_open.symbol}...", "warning")
+                    await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, cfg.take_profit, cfg.stop_loss)
+                
+                # 5. IRON SHIELD: TRAILING TAKE PROFIT (TTP)
+                profit_pct = (curr_p - any_open.entry_price) / any_open.entry_price if any_open.side == "BUY" else (any_open.entry_price - curr_p) / any_open.entry_price
+                
+                # Update Peak Price
+                if any_open.peak_price is None:
+                    any_open.peak_price = curr_p
+                else:
+                    if any_open.side == "BUY":
+                        any_open.peak_price = max(any_open.peak_price, curr_p)
+                    else:
+                        any_open.peak_price = min(any_open.peak_price, curr_p)
+                
+                # Update Peak Price in DB (Local cache first, then DB periodically)
+                if int(now.second) % 5 == 0:
+                    db_tmp = SessionLocal()
+                    t_tmp = db_tmp.query(Trade).filter(Trade.id == any_open.id).first()
+                    if t_tmp:
+                        t_tmp.peak_price = any_open.peak_price
+                        db_tmp.commit()
+                    db_tmp.close()
+
+                # TTP Logic
+                if cfg.trailing_sl_enabled and profit_pct >= cfg.trailing_tp_activation:
+                    if any_open.side == "BUY":
+                        drawdown = (any_open.peak_price - curr_p) / any_open.peak_price
+                    else:
+                        drawdown = (curr_p - any_open.peak_price) / any_open.peak_price
+                    
+                    if drawdown >= cfg.trailing_tp_callback:
+                        log(f"TRAILING TAKE PROFIT: Callback hit for {any_open.symbol}. Closing at ${curr_p}...", "success")
+                        await asyncio.to_thread(client.futures_create_order,
+                            symbol=any_open.symbol, side="SELL" if any_open.side == "BUY" else "BUY",
+                            type='MARKET', quantity=abs(current_qty), reduceOnly=True
+                        )
+                        continue # Let the next loop cycle handle the close sync
 
                 # 5. DCA RECOVERY (Manage Loss)
                 pnl_pct = ((curr_p - any_open.entry_price) / any_open.entry_price * 100) * (1 if any_open.side == "BUY" else -1)

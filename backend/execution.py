@@ -90,6 +90,11 @@ class ExecutionEngine:
         # Final safety: Ensure we don't have too many decimals for the exchange
         return float(f"{rounded:.{precision}f}")
 
+    def round_quantity(self, symbol, qty):
+        precision = self.get_quantity_precision(symbol)
+        if precision == 0: return int(qty)
+        return round(float(qty), precision)
+
     def place_limit_order(self, symbol, side, qty, price):
         try:
             rounded_price = self.round_price(symbol, price)
