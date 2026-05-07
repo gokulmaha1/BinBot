@@ -234,21 +234,21 @@ class ExecutionEngine:
             results.append(entry)
             
             # STEP 2: TAKE PROFIT
-            print(f"[EXECUTION] Step 2: Firing TP MARKET at {tp_price}...")
-            tp = self.client.futures_create_order(
-                symbol=symbol, side=exit_side, type='TAKE_PROFIT_MARKET',
-                stopPrice=tp_price, closePosition=True, workingType='MARK_PRICE'
-            )
-            results.append(tp)
+            try:
+                print(f"[EXECUTION] Step 2: Firing TP MARKET at {tp_price}...")
+                tp = self._apply_protection_safe(symbol, exit_side, 'TAKE_PROFIT_MARKET', tp_price)
+                results.append(tp)
+            except Exception as e:
+                print(f"[EXECUTION] TP Placement Failed on Entry: {e}")
             
             # STEP 3: STOP LOSS
-            print(f"[EXECUTION] Step 3: Firing SL MARKET at {sl_price}...")
-            sl = self.client.futures_create_order(
-                symbol=symbol, side=exit_side, type='STOP_MARKET',
-                stopPrice=sl_price, closePosition=True, workingType='MARK_PRICE'
-            )
-            results.append(sl)
-            
+            try:
+                print(f"[EXECUTION] Step 3: Firing SL MARKET at {sl_price}...")
+                sl = self._apply_protection_safe(symbol, exit_side, 'STOP_MARKET', sl_price)
+                results.append(sl)
+            except Exception as e:
+                print(f"[EXECUTION] SL Placement Failed on Entry: {e}")
+                
             return results, None, tp_price, sl_price
             
         except Exception as e:
