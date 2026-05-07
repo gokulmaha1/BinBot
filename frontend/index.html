@@ -353,7 +353,10 @@
 
             <!-- Column 3: Live System Logs -->
             <div class="card" style="margin-bottom: 0; display: flex; flex-direction: column;">
-                <div class="card-title">System Status Logs</div>
+                <div class="card-title">
+                    System Status Logs
+                    <button onclick="copyLogs()" class="btn" style="padding: 2px 8px; font-size: 0.7rem; background: #334155;">Copy All</button>
+                </div>
                 <div id="logsContainer" class="logs-container"
                     style="flex-grow: 1; overflow-y: auto; font-size: 0.75rem; max-height: 380px;">
                     <!-- Logs here -->
@@ -665,6 +668,20 @@
             if (result.message) alert(result.message);
             else alert('Error: ' + result.error);
             updateData();
+        }
+
+        function copyLogs() {
+            const logs = document.getElementById('logsContainer').innerText;
+            navigator.clipboard.writeText(logs).then(() => {
+                const btn = event.target;
+                const oldText = btn.innerText;
+                btn.innerText = 'Copied!';
+                btn.style.background = 'var(--success)';
+                setTimeout(() => {
+                    btn.innerText = oldText;
+                    btn.style.background = '#334155';
+                }, 2000);
+            });
         }
 
         // Init
