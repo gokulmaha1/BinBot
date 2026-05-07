@@ -12,6 +12,7 @@ import json
 import asyncio
 import pandas as pd
 from collections import defaultdict, deque
+import time
 
 # Internal Imports
 from backend.database import init_db, SessionLocal, Trade, LogEntry, Config
