@@ -60,25 +60,23 @@ class HybridStrategy:
         micro_trend = "UP" if last_1m['close'] > last_1m['ema21'] else "DOWN"
         adx_strong = last_1m['adx'] > 25 # Only trade if there's a real trend
         
-        # 3. VOLUME & 30S MOMENTUM FILTERS
-        vol_confirm = vol_spike > 1.8 # Higher threshold for surge
-        mom_confirm = abs(mom_30s) > 0.0012 # Stronger 30s push
+        # 3. VOLUME & 30S MOMENTUM FILTERS (Boosters, not gates)
+        vol_confirm = vol_spike > 1.5
+        mom_confirm = abs(mom_30s) > 0.0008
             
         rule_signal = None
         
         # --- SELECTIVE UPTREND (Both 1m & 5m must be UP) ---
         if macro_trend == "UP" and micro_trend == "UP" and adx_strong:
-            # Entry: Deep Pullback (RSI < 30) OR Momentum Breakout (RSI > 60)
-            if last_1m['rsi'] < 30 or (last_1m['rsi'] > 60 and mom_confirm):
-                if vol_confirm or mom_confirm:
-                    rule_signal = "BUY"
+            # Entry: RSI pullback (<35) OR Momentum push (RSI > 55)
+            if last_1m['rsi'] < 35 or last_1m['rsi'] > 55:
+                rule_signal = "BUY"
 
         # --- SELECTIVE DOWNTREND (Both 1m & 5m must be DOWN) ---
         elif macro_trend == "DOWN" and micro_trend == "DOWN" and adx_strong:
-            # Entry: Overbought Bounce (RSI > 70) OR Momentum Breakdown (RSI < 40)
-            if last_1m['rsi'] > 70 or (last_1m['rsi'] < 40 and mom_confirm):
-                if vol_confirm or mom_confirm:
-                    rule_signal = "SELL"
+            # Entry: RSI overbought (>65) OR Momentum breakdown (RSI < 45)
+            if last_1m['rsi'] > 65 or last_1m['rsi'] < 45:
+                rule_signal = "SELL"
             
         # 4. Final Confidence Calculation
         ai_conf = 0.5

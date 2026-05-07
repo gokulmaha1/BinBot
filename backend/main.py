@@ -562,7 +562,8 @@ async def bot_loop():
                         d['volume'] = d['vol']
 
                     # 5. Accurate 30s Momentum & Volume Spike Detection
-                    mom_30s = (curr_price - history[0]) / history[0] if len(history) >= 30 else 0
+                    ref_price = history[-30] if len(history) >= 30 else history[0]
+                    mom_30s = (curr_price - ref_price) / ref_price if ref_price > 0 else 0
                     
                     # 5. Volatility Brake (Smart Chaos Filter)
                     is_volatile = abs(mom_30s) > 0.015
@@ -579,7 +580,7 @@ async def bot_loop():
                     vol_spike = curr_vol / avg_vol if avg_vol > 0 else 1.0
 
                     # 6. Check Strategy (Triple-Lock: Confluence + Volume + 30s Mom)
-                    velocity = (curr_price - history[0]) / history[0] if len(history) >= 30 else 0
+                    velocity = mom_30s
                     signal, confidence = strategy.get_signal_with_confluence(
                         df, df_5m, df_15m, 
                         velocity=velocity, 
