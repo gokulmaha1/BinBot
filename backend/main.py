@@ -8,6 +8,7 @@ from binance.client import Client
 from binance import AsyncClient, BinanceSocketManager
 from dotenv import load_dotenv
 import os
+import json
 import asyncio
 import pandas as pd
 
