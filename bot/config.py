@@ -6,8 +6,8 @@ LIVE_API_KEY = "t7y8juHl3ms517OTSkaSHkRcKwbxhbB0xcPdoIrwskhRxOQxOExG4uPqvUHwyZBr
 LIVE_API_SECRET = "zGHx5ceVrNii2PBLat4TdJr43M3aN1D255GgwqeHKtgxIA9IWmBOxpz2kqincomF"
 
 # TESTNET API Keys (Simulation) — Generate at https://testnet.binancefuture.com
-TESTNET_API_KEY = ""
-TESTNET_API_SECRET = ""
+TESTNET_API_KEY = "R3W5c1x7HSelZRNtj8ChzGadvZNOXCZUK5HyuKknyTIPvCOf0oQ9QRwfKnjORu5J"
+TESTNET_API_SECRET = "3YrybsTDc5pSB6554RMXwdorv4g6E52yHqRijUCjZzld7Rng05ZYk9f2ZdUYpI3G"
 
 # Auto-select based on mode (overridden at runtime by DB)
 API_KEY = TESTNET_API_KEY if USE_TESTNET else LIVE_API_KEY
