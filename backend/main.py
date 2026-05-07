@@ -173,9 +173,18 @@ def get_stats(request: Request, db: Session = Depends(get_db)):
     # Fetch actual balance
     balance = 0
     try:
-        client = Client(config.API_KEY, config.API_SECRET)
-        acc_info = client.futures_account_balance()
-        balance = float(next(b['balance'] for b in acc_info if b['asset'] == 'USDT'))
+        # Get correct keys based on current mode in DB
+        cfg = db.query(Config).first()
+        use_testnet = cfg.use_testnet if cfg else True
+        if use_testnet:
+            sk, ss = config.TESTNET_API_KEY, config.TESTNET_API_SECRET
+        else:
+            sk, ss = config.LIVE_API_KEY, config.LIVE_API_SECRET
+            
+        if sk and ss:
+            client = Client(sk, ss, testnet=use_testnet)
+            acc_info = client.futures_account_balance()
+            balance = float(next(b['balance'] for b in acc_info if b['asset'] == 'USDT'))
     except Exception as e:
         print(f"Balance fetch error: {e}")
 
@@ -295,6 +304,16 @@ async def bot_loop():
         
         client = Client(api_key, api_secret, testnet=_use_testnet)
         log(f"Binance Client Initialized Successfully ({'TESTNET' if _use_testnet else 'LIVE'})", "info")
+        
+        # PRE-FLIGHT CHECK
+        executor = ExecutionEngine(client)
+        is_ok, msg = executor.check_connections()
+        if not is_ok:
+            log(f"PRE-FLIGHT FAILED: {msg}", "error")
+            bot_running = False
+            return
+        log(f"PRE-FLIGHT PASSED: {msg}", "success")
+        
     except Exception as e:
         log(f"Connection Failed: {e}", "error")
         bot_running = False

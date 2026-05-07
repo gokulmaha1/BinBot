@@ -8,14 +8,30 @@ class ExecutionEngine:
     def __init__(self, client):
         self.client = client
 
-    def setup_account(self, symbol, leverage):
+    def check_connections(self):
+        """Pre-flight check: Validates API keys, permissions, and connectivity."""
         try:
-            self.client.futures_change_leverage(symbol=symbol, leverage=leverage)
-            self.client.futures_change_margin_type(symbol=symbol, marginType='CROSSED')
-            return True
+            # 1. Test REST API + Permissions
+            acc = self.client.futures_account()
+            if not acc.get('canTrade'):
+                return False, "API Key does not have TRADING permissions."
+            
+            # 2. Test Balance Access
+            balances = self.client.futures_account_balance()
+            usdt = next((b for b in balances if b['asset'] == 'USDT'), None)
+            if not usdt:
+                return False, "Could not find USDT balance in Futures wallet."
+            
+            return True, f"Connected. Balance: ${float(usdt['balance']):.2f} USDT"
         except Exception as e:
-            print(f"[EXECUTION] Setup Error (might already be set): {e}")
-            return False
+            err_str = str(e)
+            if "Invalid API-key" in err_str:
+                return False, "Invalid API Key or Secret."
+            if "IP" in err_str:
+                return False, "IP Not Whitelisted in Binance API settings."
+            return False, f"Connection Error: {err_str}"
+
+    def setup_account(self, symbol, leverage):
 
     def get_quantity_precision(self, symbol):
         try:
@@ -166,6 +182,12 @@ class ExecutionEngine:
             
             print(f"[EXECUTION] Firing TRIPLE-VERIFIED ATOMIC BATCH for {symbol}...")
             results = self.client.futures_place_batch_order(batchOrders=batch)
+            
+            # If batch call itself succeeded, check individual order statuses
+            for r in results:
+                if 'code' in r: # This indicates an error in one of the orders
+                    return results, f"Batch Error: {r.get('msg', 'Unknown rejection')}"
+            
             return results, None
         except Exception as e:
             print(f"[EXECUTION] Atomic Error: {e}")
