@@ -485,7 +485,13 @@ async def bot_loop():
 
                 # 4. IRON SHIELD: Verification Check (Only if open)
                 is_sl_active = await asyncio.to_thread(executor.verify_sl_active, any_open.symbol)
-                if not is_sl_active:
+                
+                # Add a 20s cooldown to the Shield to prevent "API Ghosting" spam
+                now_ts = time.time()
+                last_s = getattr(any_open, '_last_shield_time', 0)
+                
+                if not is_sl_active and (now_ts - last_s > 20):
+                    any_open._last_shield_time = now_ts
                     log(f"SHIELD: Re-applying protection for {any_open.symbol}...", "warning")
                     await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, cfg.take_profit, cfg.stop_loss)
                 
