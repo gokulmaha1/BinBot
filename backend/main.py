@@ -506,7 +506,7 @@ async def bot_loop():
 
             # 4. TRIPLE SNIPE: Loop through Dynamic Watchlist
             WATCHLIST = cfg.symbols.split(',')
-            if int(now.second) % 30 < 2:
+            if int(now.second) % 60 < 2:
                 log(f"HEARTBEAT: Scanning {len(WATCHLIST)} assets...", "info")
             for symbol in WATCHLIST:
                 symbol = symbol.strip()
@@ -587,6 +587,19 @@ async def bot_loop():
                         mom_30s=mom_30s
                     )
                     
+                    # DIAGNOSTIC LOG (every 30s per symbol)
+                    if int(now.second) % 30 < 2:
+                        last_row = df.iloc[-1]
+                        rsi_val = last_row.get('rsi', 0)
+                        adx_val = last_row.get('adx', 0)
+                        ema9 = last_row.get('ema9', 0)
+                        ema21 = last_row.get('ema21', 0)
+                        micro = 'UP' if last_row['close'] > ema21 else 'DOWN'
+                        last_5m_row = df_5m.iloc[-1]
+                        macro = 'UP' if last_5m_row['close'] > last_5m_row.get('ema50', 0) else 'DOWN'
+                        reason = "SIGNAL FOUND" if signal else f"No signal (Trend:{micro}/{macro} ADX:{adx_val:.0f} RSI:{rsi_val:.0f} Vol:{vol_spike:.1f}x Mom:{mom_30s*100:.3f}%)"
+                        log(f"SCAN {symbol}: {reason}", "info" if not signal else "success")
+
                     if signal:
                         # 7. AI PROBABILITY LAYER
                         ai_data = {
