@@ -224,7 +224,7 @@ async def start_socket_feed():
             if not watchlist: watchlist = ['labusdt']
             
             log(f"SOCKET: Connecting to Multi-Stream ({', '.join(watchlist)})...", "info")
-            client = await AsyncClient.create(config.API_KEY, config.API_SECRET)
+            client = await AsyncClient.create(config.API_KEY, config.API_SECRET, testnet=config.USE_TESTNET)
             bm = BinanceSocketManager(client)
             
             # Combine all symbols into a single multiplex stream
@@ -259,8 +259,8 @@ async def bot_loop():
     
     # Binance Client
     try:
-        client = Client(config.API_KEY, config.API_SECRET)
-        log("Binance Client Initialized Successfully", "info")
+        client = Client(config.API_KEY, config.API_SECRET, testnet=config.USE_TESTNET)
+        log(f"Binance Client Initialized Successfully ({'TESTNET' if config.USE_TESTNET else 'LIVE'})", "info")
     except Exception as e:
         log(f"Connection Failed: {e}", "error")
         bot_running = False

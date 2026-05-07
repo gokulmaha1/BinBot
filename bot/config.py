@@ -1,4 +1,5 @@
 # Binance API Credentials
+USE_TESTNET = True
 API_KEY = "t7y8juHl3ms517OTSkaSHkRcKwbxhbB0xcPdoIrwskhRxOQxOExG4uPqvUHwyZBr"
 API_SECRET = "zGHx5ceVrNii2PBLat4TdJr43M3aN1D255GgwqeHKtgxIA9IWmBOxpz2kqincomF"
 
@@ -16,10 +17,6 @@ STOP_LOSS = 0.015      # 1.5% price move = 30% Loss (Tight)
 DAILY_LOSS_LIMIT = 200.0
 DCA = True             # Enable/Disable Averaging Down
 TRAILING_STOP_LOSS = True # Enable/Disable Profit Locking Levels
-
-
-
-
 
 
 # Technical Indicators

@@ -2,6 +2,7 @@ from binance.client import Client
 from binance.enums import *
 import os
 import logging
+import config
 
 class ExecutionEngine:
     def __init__(self, client):
