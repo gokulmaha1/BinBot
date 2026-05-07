@@ -208,7 +208,12 @@ async def websocket_endpoint(websocket: WebSocket):
         connected_clients.remove(websocket)
 
 @app.get("/api/price")
-def get_price(symbol: str = "LABUSDT"):
+def get_price(symbol: str = ""):
+    if not symbol:
+        db = SessionLocal()
+        cfg = db.query(Config).first()
+        symbol = cfg.symbols.split(',')[0].strip() if cfg else "BTCUSDT"
+        db.close()
     return {"symbol": symbol, "price": LATEST_PRICES.get(symbol.upper(), 0.0)}
 
 async def start_socket_feed():
@@ -222,7 +227,11 @@ async def start_socket_feed():
             
             # 1. Prepare symbols for socket
             watchlist = [s.strip().lower() for s in cfg.symbols.split(',') if s.strip()]
-            if not watchlist: watchlist = ['labusdt']
+            if not watchlist:
+                db2 = SessionLocal()
+                cfg2 = db2.query(Config).first()
+                watchlist = [s.strip().lower() for s in cfg2.symbols.split(',') if s.strip()] if cfg2 else ['btcusdt']
+                db2.close()
             
             log(f"SOCKET: Connecting to Multi-Stream ({', '.join(watchlist)})...", "info")
             client = await AsyncClient.create(config.API_KEY, config.API_SECRET, testnet=config.USE_TESTNET)

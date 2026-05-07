@@ -9,10 +9,8 @@ def calculate_quantity(balance, price):
     risk_amount = balance * config.RISK_PER_TRADE
     qty = (risk_amount * config.LEVERAGE) / price
     
-    # Binance Futures requires specific precision for each symbol
-    # For XRPUSDT, 1 decimal place is usually fine, but in production
-    # we should ideally fetch stepSize from exchange info.
-    # LABUSDT requires integer quantity (Step Size: 1)
+    # Binance Futures requires specific precision per symbol.
+    # Step size is fetched dynamically by the Execution Engine.
     return int(qty)
 
 def get_tp_sl_prices(side, entry_price):
