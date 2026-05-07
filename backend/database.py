@@ -66,7 +66,7 @@ class Config(Base):
     daily_loss_limit = Column(Float, default=200.0)
     use_dynamic = Column(Boolean, default=True)
     dynamic_risk_pct = Column(Float, default=0.50)
-    dca_enabled = Column(Boolean, default=True)
+    dca_enabled = Column(Boolean, default=False)
     trailing_sl_enabled = Column(Boolean, default=True)
 
 def init_db():
