@@ -545,6 +545,23 @@
             ctx.lineTo(0, canvas.height);
             ctx.fillStyle = grad;
             ctx.fill();
+            
+            // Draw Current Price Overlay in Chart
+            const currentPrice = priceData[priceData.length - 1];
+            ctx.fillStyle = '#f8fafc'; // White text
+            ctx.font = 'bold 18px sans-serif';
+            ctx.textAlign = 'right';
+            
+            // Draw a subtle background pill for readability
+            const priceText = '$' + currentPrice.toFixed(4);
+            const textWidth = ctx.measureText(priceText).width;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+            ctx.beginPath();
+            ctx.roundRect(canvas.width - textWidth - 20, 10, textWidth + 16, 26, 6);
+            ctx.fill();
+            
+            ctx.fillStyle = '#22c55e'; // Green text
+            ctx.fillText(priceText, canvas.width - 12, 28);
         }
 
         let pollInterval = null;
