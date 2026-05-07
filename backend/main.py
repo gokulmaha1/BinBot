@@ -704,12 +704,18 @@ async def bot_loop():
                             tp_price_pct = cfg.take_profit / active_leverage
                             sl_price_pct = cfg.stop_loss / active_leverage
 
-                            results, error = executor.place_atomic_trade(
+                            result = executor.place_atomic_trade(
                                 symbol, signal, qty, curr_price, tp_price_pct, sl_price_pct
                             )
                             
+                            if result is None:
+                                log(f"EXECUTION FAILED: place_atomic_trade returned None for {symbol}. Check API keys.", "error")
+                                continue
+                            
+                            results, error = result
+                            
                             # Validate ALL 3 orders (Entry, TP, SL)
-                            success_count = sum(1 for r in results if isinstance(r, dict) and 'orderId' in r)
+                            success_count = sum(1 for r in (results or []) if isinstance(r, dict) and 'orderId' in r)
                             
                             if success_count == 3:
                                 log(f"TRIPLE STRIKE SUCCESS: Entry + TP + SL active for {symbol}.", "success")
