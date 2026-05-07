@@ -813,18 +813,32 @@ async def bot_loop():
                                     log("SHIELD: Reducing trade size by 50% due to losing streak.", "warning")
                                     
                                 investment = wallet_usdt * risk_pct
-                                # 2. Sync Leverage to Binance
+                                
+                                # 1. Sweep any ghost orders holding margin or blocking leverage changes
+                                try:
+                                    await asyncio.to_thread(client.futures_cancel_all_open_orders, symbol=symbol)
+                                except Exception as e:
+                                    log(f"SHIELD: Minor sweep error: {e}", "info")
+                                
+                                # 2. Sync Leverage and Margin Type to Binance
+                                try:
+                                    await asyncio.to_thread(client.futures_change_margin_type, symbol=symbol, marginType='ISOLATED')
+                                except Exception as e:
+                                    # Ignore if it's already isolated
+                                    pass
+                                    
                                 try:
                                     await asyncio.to_thread(client.futures_change_leverage, symbol=symbol, leverage=active_leverage)
-                                except: pass
+                                except Exception as e:
+                                    log(f"EXECUTION BLOCKED: Could not change leverage to {active_leverage}x. Error: {e}", "error")
+                                    continue
                                 
                                 target_value = investment * active_leverage 
                                 raw_qty = target_value / curr_price
                                 log(f"FORTRESS ALLOCATION: Using ${investment:.2f} (Fixed 50% of ${wallet_usdt:.2f} balance)", "warning")
                             except Exception as e:
-                                log(f"DYNAMIC ERROR: Could not fetch balance ({e}). Using safety fallback $5.", "error")
-                                target_value = 5.0 * active_leverage
-                                raw_qty = target_value / curr_price
+                                log(f"DYNAMIC ERROR: Could not calculate balance ({e}). Trade aborted.", "error")
+                                continue
 
                             import math
                             precision = executor.get_quantity_precision(symbol)
@@ -838,13 +852,7 @@ async def bot_loop():
                                 log(f"Execution Failed: Calculated Qty is 0. Check Balance!", "error")
                                 continue
 
-                            # Sweep any ghost orders holding margin
-                            try:
-                                await asyncio.to_thread(client.futures_cancel_all_open_orders, symbol=symbol)
-                            except:
-                                pass
-
-                            # 2. Execute TRIPLE-VERIFIED ATOMIC BATCH (ROI-BASED)
+                            # 3. Execute TRIPLE-VERIFIED ATOMIC BATCH (ROI-BASED)
                             # Convert ROI % to Price % based on Leverage
                             tp_price_pct = cfg.take_profit / active_leverage
                             sl_price_pct = cfg.stop_loss / active_leverage
