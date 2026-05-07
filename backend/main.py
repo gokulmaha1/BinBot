@@ -193,34 +193,22 @@ async def update_trade_protection(trade_id: int, data: dict, request: Request, d
         client = Client(sk, ss, testnet=use_testnet)
         executor = ExecutionEngine(client)
         
-        # 1. Update on Binance (this cancels old and sets new)
-        # We pass 0 for pct as we are providing absolute prices
-        success = executor.set_tp_sl(trade.symbol, trade.side, trade.entry_price, 0, 0, absolute_sl=new_sl)
-        # set_tp_sl doesn't take absolute TP in current version, let's fix that in execution.py or just use the stopPrice
-        
-        # Wait, I should update set_tp_sl to be more flexible.
-        # For now, let's just do it manually here for speed.
-        exit_side = "SELL" if trade.side == "BUY" else "BUY"
-        client.futures_cancel_all_open_orders(symbol=trade.symbol)
-        
-        # New TP
-        client.futures_create_order(
-            symbol=trade.symbol, side=exit_side, type='TAKE_PROFIT_MARKET',
-            stopPrice=executor.round_price(trade.symbol, new_tp), closePosition=True, workingType='MARK_PRICE'
-        )
-        # New SL
-        client.futures_create_order(
-            symbol=trade.symbol, side=exit_side, type='STOP_MARKET',
-            stopPrice=executor.round_price(trade.symbol, new_sl), closePosition=True, workingType='MARK_PRICE'
-        )
+        # Sync with Binance and fallback if needed
+        success, err = executor.manual_update_protection(trade.symbol, trade.side, new_tp, new_sl)
+        if not success:
+            return {"error": f"Binance rejection: {err}"}
         
         # 2. Update DB
         trade.tp_price = new_tp
         trade.sl_price = new_sl
         db.commit()
         
+        msg = "Protection updated on Binance and DB"
+        if err: msg = f"{msg} ({err})"
+        
         log(f"MANUAL OVERRIDE: TP/SL updated for {trade.symbol} (${new_tp} / ${new_sl})", "success")
-        return {"message": "Protection updated on Binance and DB"}
+        return {"message": msg}
+
     except Exception as e:
         db.rollback()
         return {"error": str(e)}

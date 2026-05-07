@@ -153,6 +153,43 @@ class ExecutionEngine:
             print(f"[EXECUTION] TP/SL Error for {symbol}: {e}")
             return False
 
+    def manual_update_protection(self, symbol, side, tp_price, sl_price):
+        """
+        Manually syncs TP/SL for an existing position.
+        """
+        exit_side = SIDE_SELL if side == SIDE_BUY else SIDE_BUY
+        tp_price = self.round_price(symbol, tp_price)
+        sl_price = self.round_price(symbol, sl_price)
+        
+        try:
+            # 1. Clear old protection
+            self.client.futures_cancel_all_open_orders(symbol=symbol)
+            
+            # 2. Set TP
+            self.client.futures_create_order(
+                symbol=symbol, side=exit_side, type='TAKE_PROFIT_MARKET',
+                stopPrice=tp_price, closePosition=True, workingType='MARK_PRICE'
+            )
+            
+            # 3. Set SL
+            self.client.futures_create_order(
+                symbol=symbol, side=exit_side, type='STOP_MARKET',
+                stopPrice=sl_price, closePosition=True, workingType='MARK_PRICE'
+            )
+            return True, None
+        except Exception as e:
+            err = str(e)
+            print(f"[EXECUTION] Manual Sync Error for {symbol}: {err}")
+            # Fallback: Try setting only the SL if TP fails (often TP fails if price is too close)
+            try:
+                self.client.futures_create_order(
+                    symbol=symbol, side=exit_side, type='STOP_MARKET',
+                    stopPrice=sl_price, closePosition=True, workingType='MARK_PRICE'
+                )
+                return True, f"Partial Success (Only SL set): {err}"
+            except:
+                return False, err
+
     def place_atomic_trade(self, symbol, side, qty, curr_price, tp_pct, sl_pct):
         """
         Executes a sequential TRIPLE-STRIKE (Entry -> TP -> SL).
