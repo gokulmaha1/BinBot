@@ -416,6 +416,10 @@
                 document.getElementById('cfgTrailing').value = cfg.trailing_sl.toString();
                 document.getElementById('cfgSymbols').value = cfg.symbols;
                 document.getElementById('cfgTestnet').value = cfg.use_testnet.toString();
+                // Set active asset label immediately
+                const firstSymbol = cfg.symbols.split(',')[0].trim().toUpperCase();
+                document.getElementById('activeAsset').innerText = firstSymbol;
+                document.getElementById('livePrice').innerText = '$0.00';
             } catch (e) { console.error('Config Load Error', e); }
         }
 
