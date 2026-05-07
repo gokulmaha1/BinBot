@@ -113,6 +113,13 @@
 <body>
     <nav class="navbar">
         <div class="logo">BinBot <span>PRO</span></div>
+        <div style="display: flex; align-items: center; gap: 0.8rem; flex: 1; margin: 0 1.5rem;">
+            <input type="text" id="cfgSymbols" placeholder="e.g. BTCUSDT,ETHUSDT" style="flex: 1; max-width: 350px; padding: 6px 10px; font-size: 0.8rem; border-radius: 6px;">
+            <select id="cfgTestnet" style="padding: 6px 10px; font-size: 0.8rem; border-radius: 6px; min-width: 140px; border-color: var(--warning);">
+                <option value="true">⚡ TESTNET</option>
+                <option value="false">🔴 LIVE</option>
+            </select>
+        </div>
         <div style="display: flex; align-items: center; gap: 1rem;">
             <div id="botStatus">Bot Idle</div>
             <button id="toggleBtn" class="btn btn-start">Start Bot</button>
@@ -162,17 +169,6 @@
                     </div>
                     <div class="input-group"><label>Trailing SL</label>
                         <select id="cfgTrailing"><option value="true">ON</option><option value="false">OFF</option></select>
-                    </div>
-                    <div class="input-group" style="grid-column: span 2;">
-                        <label>Watchlist (Comma Separated)</label>
-                        <input type="text" id="cfgSymbols" placeholder="e.g. BTCUSDT,ETHUSDT,SOLUSDT">
-                    </div>
-                    <div class="input-group" style="grid-column: span 2;">
-                        <label style="color: var(--warning);">⚡ Network Mode (Restart Required)</label>
-                        <select id="cfgTestnet" style="border-color: var(--warning);">
-                            <option value="true">TESTNET (Simulation)</option>
-                            <option value="false">LIVE (Real Money)</option>
-                        </select>
                     </div>
                 </div>
                 <button id="saveBtn" class="btn btn-save" style="width: 100%; margin-top: 1rem; background: var(--primary); color: white;">Save Configuration</button>
