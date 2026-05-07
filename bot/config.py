@@ -4,7 +4,7 @@ API_KEY = "t7y8juHl3ms517OTSkaSHkRcKwbxhbB0xcPdoIrwskhRxOQxOExG4uPqvUHwyZBr"
 API_SECRET = "zGHx5ceVrNii2PBLat4TdJr43M3aN1D255GgwqeHKtgxIA9IWmBOxpz2kqincomF"
 
 # Trading Settings
-SYMBOL = "LABUSDT"
+# SYMBOL is now managed dynamically via the Dashboard Watchlist (DB-driven)
 LEVERAGE = 20
 TIMEFRAME = "1m"
 

@@ -68,7 +68,7 @@ class Config(Base):
     dynamic_risk_pct = Column(Float, default=0.50)
     dca_enabled = Column(Boolean, default=False)
     trailing_sl_enabled = Column(Boolean, default=True)
-    symbols = Column(String, default="LABUSDT,PEPEUSDT,SOLUSDT")
+    symbols = Column(String, default="LABUSDT,PEPEUSDT,DOGSUSDT")
 
 def init_db():
     Base.metadata.create_all(bind=engine)

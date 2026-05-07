@@ -44,7 +44,7 @@ from fastapi.responses import FileResponse
 bot_running = False
 bot_task = None
 latest_confidence = 0.5
-LATEST_PRICES = {"LABUSDT": 0.0}
+LATEST_PRICES = {}
 connected_clients = []
 
 
@@ -139,7 +139,7 @@ async def update_config(data: dict, request: Request):
         cfg.dynamic_risk_pct = float(data.get("dynamic_risk_pct", 0.50))
         cfg.dca_enabled = str(data.get("dca")).lower() == "true"
         cfg.trailing_sl_enabled = str(data.get("trailing_sl")).lower() == "true"
-        cfg.symbols = data.get("symbols", "LABUSDT")
+        cfg.symbols = data.get("symbols", cfg.symbols)
         db.commit()
         return {"message": "Config updated successfully"}
     except Exception as e:
@@ -194,7 +194,7 @@ bot_running = False
 bot_task = None
 pnl_reset_time = None
 latest_confidence = 0.5
-LATEST_PRICES = {"LABUSDT": 0.0}
+LATEST_PRICES = {}
 connected_clients = []
 
 @app.websocket("/ws/price")
@@ -275,9 +275,15 @@ async def bot_loop():
     
     # 1. Background Scanner Task (DEPRECATED - Using Fixed Pairs)
     async def run_scanner():
-        log("Dynamic Scanner: [OFFLINE] - Using Hardened List: LABUSDT ONLY", "info")
+        log("Dynamic Scanner: [OFFLINE] - Using DB Watchlist", "info")
 
-    log(f"Bot Heartbeat: [ONLINE]. Sniper engaging: {', '.join(SYMBOLS)}", "warning")
+    # Read initial watchlist from DB for startup log
+    _db = SessionLocal()
+    _cfg = _db.query(Config).first()
+    _watchlist = _cfg.symbols if _cfg else "N/A"
+    _db.close()
+
+    log(f"Bot Heartbeat: [ONLINE]. Radar scanning: {_watchlist}", "warning")
     
     while bot_running:
         try:
