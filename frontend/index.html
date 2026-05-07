@@ -133,7 +133,7 @@
         <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
             <!-- Column 1: Live Feed & AI -->
             <div class="card" style="margin-bottom: 0;">
-                <div class="card-title">Live Feed: <span id="livePrice" style="color: #60a5fa;">$0.00</span></div>
+                <div class="card-title">Live Feed: <span id="activeAsset" style="font-size: 0.8rem; color: var(--text-dim); margin-right: 10px;">[---]</span> <span id="livePrice" style="color: #60a5fa;">$0.00</span></div>
                 <canvas id="priceChart" style="width: 100%; height: 260px; background: rgba(0,0,0,0.2); border-radius: 8px;"></canvas>
                 
                 <div style="margin-top: 1rem;">
@@ -271,6 +271,7 @@
                 // Fetch the active symbols to know what to display
                 const symbolsInput = document.getElementById('cfgSymbols').value;
                 const mainSymbol = symbolsInput.split(',')[0].trim().toUpperCase() || "LABUSDT";
+                document.getElementById('activeAsset').innerText = mainSymbol;
 
                 if (data.symbol === mainSymbol) {
                     updateChart(data.price);
@@ -286,7 +287,9 @@
                 if (!pollInterval) {
                     pollInterval = setInterval(async () => {
                         try {
-                            const res = await fetch('/api/price');
+                            const symbolsInput = document.getElementById('cfgSymbols').value;
+                            const mainSymbol = symbolsInput.split(',')[0].trim().toUpperCase() || "LABUSDT";
+                            const res = await fetch(`/api/price?symbol=${mainSymbol}`);
                             const data = await res.json();
                             if (data.price > 0) {
                                 updateChart(data.price);

@@ -207,8 +207,8 @@ async def websocket_endpoint(websocket: WebSocket):
         connected_clients.remove(websocket)
 
 @app.get("/api/price")
-def get_price():
-    return {"price": LATEST_PRICES.get("LABUSDT", 0.0)}
+def get_price(symbol: str = "LABUSDT"):
+    return {"symbol": symbol, "price": LATEST_PRICES.get(symbol.upper(), 0.0)}
 
 async def start_socket_feed():
     """Dynamic Multiplex Socket Feed for Watchlist"""
@@ -490,7 +490,6 @@ async def bot_loop():
                 try:
                     # Fetch Data (High Speed WebSocket with REST Fallback)
                     curr_price = LATEST_PRICES.get(symbol, 0.0)
-                    # ...
                     if curr_price == 0:
                         ticker = await asyncio.to_thread(client.futures_symbol_ticker, symbol=symbol)
                         curr_price = float(ticker['price'])
