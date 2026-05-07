@@ -79,8 +79,11 @@ class ExecutionEngine:
 
     def round_price(self, symbol, price):
         tick_size, precision = self.get_price_info(symbol)
-        if tick_size == 0: return round(price, 2)
-        return round(round(float(price) / tick_size) * tick_size, precision)
+        if tick_size == 0: return round(price, 8)
+        # Use Decimal-like precision logic for tick_size alignment
+        rounded = round(round(float(price) / tick_size) * tick_size, precision)
+        # Final safety: Ensure we don't have too many decimals for the exchange
+        return float(f"{rounded:.{precision}f}")
 
     def place_limit_order(self, symbol, side, qty, price):
         try:
@@ -196,12 +199,17 @@ class ExecutionEngine:
     def verify_sl_active(self, symbol):
         try:
             open_orders = self.client.futures_get_open_orders(symbol=symbol)
-            # We consider the shield active if there is at least ONE STOP_MARKET or TAKE_PROFIT_MARKET order
-            # This prevents the loop if one is placed but the other is pending or cancelled
-            has_sl = any(o['type'] == 'STOP_MARKET' for o in open_orders)
-            has_tp = any(o['type'] == 'TAKE_PROFIT_MARKET' for o in open_orders)
             
-            return has_sl and has_tp # Both must exist for a healthy shield
+            # Diagnostic Log: What did we find?
+            order_types = [f"{o['type']}({o['side']})" for o in open_orders]
+            
+            has_sl = any(o['type'] in ['STOP_MARKET', 'STOP'] for o in open_orders)
+            has_tp = any(o['type'] in ['TAKE_PROFIT_MARKET', 'TAKE_PROFIT'] for o in open_orders)
+            
+            if not (has_sl and has_tp):
+                print(f"[SHIELD] Verification failed for {symbol}. Found orders: {order_types}")
+            
+            return has_sl and has_tp
         except Exception as e:
             print(f"[EXECUTION] SL Verification Error: {e}")
             return True # Return True on error to prevent spamming orders during API blips
