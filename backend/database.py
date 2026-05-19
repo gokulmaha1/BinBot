@@ -76,6 +76,8 @@ class Config(Base):
     trailing_tp_callback = Column(Float, default=0.002)  # 0.2% pullback to close
     symbols = Column(String, default="LABUSDT,PEPEUSDT,DOGSUSDT")
     use_testnet = Column(Boolean, default=True)
+    static_tp_enabled = Column(Boolean, default=False)
+    static_tp_roi = Column(Float, default=0.02)  # 2% ROI target
 
 def init_db():
     Base.metadata.create_all(bind=engine)

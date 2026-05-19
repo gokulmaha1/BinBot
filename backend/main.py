@@ -132,7 +132,9 @@ async def get_config(request: Request):
         "trailing_tp_activation": cfg.trailing_tp_activation,
         "trailing_tp_callback": cfg.trailing_tp_callback,
         "symbols": cfg.symbols,
-        "use_testnet": cfg.use_testnet
+        "use_testnet": cfg.use_testnet,
+        "static_tp_enabled": cfg.static_tp_enabled,
+        "static_tp_roi": cfg.static_tp_roi
     }
 
 @app.post("/api/config/update")
@@ -154,6 +156,8 @@ async def update_config(data: dict, request: Request):
         cfg.trailing_tp_callback = float(data.get("trailing_tp_callback", 0.002))
         cfg.symbols = data.get("symbols", cfg.symbols)
         cfg.use_testnet = str(data.get("use_testnet", "true")).lower() == "true"
+        cfg.static_tp_enabled = str(data.get("static_tp_enabled", "false")).lower() == "true"
+        cfg.static_tp_roi = float(data.get("static_tp_roi", 0.02))
         db.commit()
         return {"message": "Config updated successfully"}
     except Exception as e:
@@ -504,41 +508,43 @@ async def bot_loop():
                     await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, cfg.take_profit, cfg.stop_loss)
                 
                 # 5. IRON SHIELD: TRAILING TAKE PROFIT (TTP)
-                safe_entry = any_open.entry_price if any_open.entry_price > 0 else curr_p
-                profit_pct = (curr_p - safe_entry) / safe_entry if any_open.side == "BUY" else (safe_entry - curr_p) / safe_entry
-                
-                # Update Peak Price
-                if any_open.peak_price is None:
-                    any_open.peak_price = curr_p
-                else:
-                    if any_open.side == "BUY":
-                        any_open.peak_price = max(any_open.peak_price, curr_p)
-                    else:
-                        any_open.peak_price = min(any_open.peak_price, curr_p)
-                
-                # Update Peak Price in DB (Local cache first, then DB periodically)
-                if int(now.second) % 5 == 0:
-                    db_tmp = SessionLocal()
-                    t_tmp = db_tmp.query(Trade).filter(Trade.id == any_open.id).first()
-                    if t_tmp:
-                        t_tmp.peak_price = any_open.peak_price
-                        db_tmp.commit()
-                    db_tmp.close()
-
-                # TTP Logic
-                if getattr(cfg, 'trailing_tp_enabled', True) and profit_pct >= cfg.trailing_tp_activation:
-                    if any_open.side == "BUY":
-                        drawdown = (any_open.peak_price - curr_p) / any_open.peak_price
-                    else:
-                        drawdown = (curr_p - any_open.peak_price) / any_open.peak_price
+                # SKIP if static TP is enabled
+                if not getattr(cfg, 'static_tp_enabled', False) and getattr(cfg, 'trailing_tp_enabled', True):
+                    safe_entry = any_open.entry_price if any_open.entry_price > 0 else curr_p
+                    profit_pct = (curr_p - safe_entry) / safe_entry if any_open.side == "BUY" else (safe_entry - curr_p) / safe_entry
                     
-                    if drawdown >= cfg.trailing_tp_callback:
-                        log(f"TRAILING TAKE PROFIT: Callback hit for {any_open.symbol}. Closing at ${curr_p}...", "success")
-                        await asyncio.to_thread(client.futures_create_order,
-                            symbol=any_open.symbol, side="SELL" if any_open.side == "BUY" else "BUY",
-                            type='MARKET', quantity=abs(current_qty), reduceOnly=True
-                        )
-                        continue # Let the next loop cycle handle the close sync
+                    # Update Peak Price
+                    if any_open.peak_price is None:
+                        any_open.peak_price = curr_p
+                    else:
+                        if any_open.side == "BUY":
+                            any_open.peak_price = max(any_open.peak_price, curr_p)
+                        else:
+                            any_open.peak_price = min(any_open.peak_price, curr_p)
+                    
+                    # Update Peak Price in DB (Local cache first, then DB periodically)
+                    if int(now.second) % 5 == 0:
+                        db_tmp = SessionLocal()
+                        t_tmp = db_tmp.query(Trade).filter(Trade.id == any_open.id).first()
+                        if t_tmp:
+                            t_tmp.peak_price = any_open.peak_price
+                            db_tmp.commit()
+                        db_tmp.close()
+
+                    # TTP Logic
+                    if profit_pct >= cfg.trailing_tp_activation:
+                        if any_open.side == "BUY":
+                            drawdown = (any_open.peak_price - curr_p) / any_open.peak_price
+                        else:
+                            drawdown = (curr_p - any_open.peak_price) / any_open.peak_price
+                        
+                        if drawdown >= cfg.trailing_tp_callback:
+                            log(f"TRAILING TAKE PROFIT: Callback hit for {any_open.symbol}. Closing at ${curr_p}...", "success")
+                            await asyncio.to_thread(client.futures_create_order,
+                                symbol=any_open.symbol, side="SELL" if any_open.side == "BUY" else "BUY",
+                                type='MARKET', quantity=abs(current_qty), reduceOnly=True
+                            )
+                            continue # Let the next loop cycle handle the close sync
 
                 # 5. DCA RECOVERY (Manage Loss)
                 pnl_pct = ((curr_p - any_open.entry_price) / any_open.entry_price * 100) * (1 if any_open.side == "BUY" else -1)
@@ -567,9 +573,11 @@ async def bot_loop():
                         log(f"RECOVERY FAILED: {error}", "error")
 
                 # 6. DYNAMIC SMART MANAGEMENT (Shield System)
+                # SKIP entirely if static TP is enabled - let the static TP order handle exit
                 duration_mins = (now - any_open.entry_time.replace(tzinfo=IST)).total_seconds() / 60
                 
-                if cfg.trailing_sl_enabled:
+                if not getattr(cfg, 'static_tp_enabled', False) and cfg.trailing_sl_enabled:
+                    
                     # TIER 0: BREAK-EVEN SHIELD (+5% ROI Lock)
                     # If ROI > 5%, move SL to positive side (cover fees: ~0.1% net)
                     if roi_pct >= 5.0 and any_open.fee < 2:
@@ -619,7 +627,8 @@ async def bot_loop():
                         await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, new_tp_p_pct, sl_p_pct)
 
                 # B. TIME-BASED ESCAPE (Reduce Opportunity Loss)
-                elif cfg.trailing_sl_enabled and duration_mins > 5 and 0.1 < pnl_pct < (cfg.take_profit / any_open.leverage) and any_open.fee < 20:
+                # SKIP if static TP is enabled
+                elif not getattr(cfg, 'static_tp_enabled', False) and cfg.trailing_sl_enabled and duration_mins > 5 and 0.1 < pnl_pct < (cfg.take_profit / any_open.leverage) and any_open.fee < 20:
                     log(f"TIME ESCAPE: Trade is slow ({duration_mins:.1f}m). Reducing TP to 0.2% for quick exit.", "warning")
                     sl_p_pct = cfg.stop_loss / any_open.leverage
                     await asyncio.to_thread(executor.set_tp_sl, any_open.symbol, any_open.side, any_open.entry_price, 0.002, sl_p_pct)
@@ -866,8 +875,16 @@ async def bot_loop():
                             tp_price_pct = cfg.take_profit / active_leverage
                             sl_price_pct = cfg.stop_loss / active_leverage
 
+                            # Static TP: Calculate fee-adjusted TP price
+                            static_tp_price = None
+                            if getattr(cfg, 'static_tp_enabled', False):
+                                static_tp_price = executor.calculate_static_tp_price(
+                                    symbol, signal, curr_price, cfg.static_tp_roi, active_leverage
+                                )
+                                log(f"STATIC TP: Target ROI {cfg.static_tp_roi*100:.1f}% -> TP Price: ${static_tp_price:.6f} (fees included)", "info")
+
                             result = executor.place_atomic_trade(
-                                symbol, signal, qty, curr_price, tp_price_pct, sl_price_pct
+                                symbol, signal, qty, curr_price, tp_price_pct, sl_price_pct, static_tp_price=static_tp_price
                             )
                             
                             if result is None:
@@ -972,45 +989,59 @@ async def sync_trades_background():
                     current_qty = pos_map.get(trade.symbol, 0)
                     
                     if abs(current_qty) > 0.00000001:
-                        # Profit Guard Logic (Trailing SL)
-                        try:
-                            ticker = client.futures_symbol_ticker(symbol=trade.symbol)
-                            price = float(ticker['price'])
-                            entry = trade.entry_price
-                            side = trade.side
-                            p_diff = (price - entry) / entry if side == 'BUY' else (entry - price) / entry
-                            
-                            # LEVEL 0: Break-Even at +6% ROI (0.3% price move)
-                            if p_diff >= 0.003 and trade.fee < 0.5:
-                                log(f"IRON SHIELD: Price hit +6% ROI on {trade.symbol}. Moving SL to BREAK-EVEN.", "warning")
-                                new_sl = entry * 1.0005 if side == 'BUY' else entry * 0.9995
-                                executor.set_tp_sl(trade.symbol, side, entry, config.TAKE_PROFIT, 0, absolute_sl=new_sl)
-                                trade.fee = 0.5 
-                            
-                            # LEVEL 1: Profit Lock at +15% ROI (0.75% price move)
-                            elif p_diff >= 0.0075 and trade.fee < 1.0:
-                                log(f"PROFIT LOCK: Price hit +15% ROI on {trade.symbol}. Locking in +5% profit.", "warning")
-                                new_sl = entry * 1.0025 if side == 'BUY' else entry * 0.9975
-                                executor.set_tp_sl(trade.symbol, side, entry, config.TAKE_PROFIT, 0, absolute_sl=new_sl)
-                                trade.fee = 1.0
-                            
-                            # LEVEL 2: PROFIT EXTENSION (Moon Shot)
-                            # If price hits 90% of our TP target, extend TP and move SL to lock original profit
-                            elif p_diff >= (config.TAKE_PROFIT * 0.9) and trade.fee < 2.0:
-                                extended_tp = config.TAKE_PROFIT + 0.005 # Add 0.5% to target
-                                lock_sl_price = entry * (1 + config.TAKE_PROFIT * 0.8) if side == 'BUY' else entry * (1 - config.TAKE_PROFIT * 0.8)
-                                log(f"MOON SHOT: {trade.symbol} nearing TP! Extending target and locking SL at 80% of original TP.", "warning")
-                                executor.set_tp_sl(trade.symbol, side, entry, extended_tp, 0, absolute_sl=lock_sl_price)
-                                trade.fee = 2.0 
+                        # Check if static TP is enabled - skip profit guard if so
+                        cfg = db.query(Config).first()
+                        static_tp_active = getattr(cfg, 'static_tp_enabled', False) if cfg else False
+                        
+                        if not static_tp_active:
+                            # Profit Guard Logic (Trailing SL) - SKIP when static TP is enabled
+                            try:
+                                ticker = client.futures_symbol_ticker(symbol=trade.symbol)
+                                price = float(ticker['price'])
+                                entry = trade.entry_price
+                                side = trade.side
+                                p_diff = (price - entry) / entry if side == 'BUY' else (entry - price) / entry
+                                
+                                # LEVEL 0: Break-Even at +6% ROI (0.3% price move)
+                                if p_diff >= 0.003 and trade.fee < 0.5:
+                                    log(f"IRON SHIELD: Price hit +6% ROI on {trade.symbol}. Moving SL to BREAK-EVEN.", "warning")
+                                    new_sl = entry * 1.0005 if side == 'BUY' else entry * 0.9995
+                                    executor.set_tp_sl(trade.symbol, side, entry, config.TAKE_PROFIT, 0, absolute_sl=new_sl)
+                                    trade.fee = 0.5 
+                                
+                                # LEVEL 1: Profit Lock at +15% ROI (0.75% price move)
+                                elif p_diff >= 0.0075 and trade.fee < 1.0:
+                                    log(f"PROFIT LOCK: Price hit +15% ROI on {trade.symbol}. Locking in +5% profit.", "warning")
+                                    new_sl = entry * 1.0025 if side == 'BUY' else entry * 0.9975
+                                    executor.set_tp_sl(trade.symbol, side, entry, config.TAKE_PROFIT, 0, absolute_sl=new_sl)
+                                    trade.fee = 1.0
+                                
+                                # LEVEL 2: PROFIT EXTENSION (Moon Shot)
+                                # If price hits 90% of our TP target, extend TP and move SL to lock original profit
+                                elif p_diff >= (config.TAKE_PROFIT * 0.9) and trade.fee < 2.0:
+                                    extended_tp = config.TAKE_PROFIT + 0.005 # Add 0.5% to target
+                                    lock_sl_price = entry * (1 + config.TAKE_PROFIT * 0.8) if side == 'BUY' else entry * (1 - config.TAKE_PROFIT * 0.8)
+                                    log(f"MOON SHOT: {trade.symbol} nearing TP! Extending target and locking SL at 80% of original TP.", "warning")
+                                    executor.set_tp_sl(trade.symbol, side, entry, extended_tp, 0, absolute_sl=lock_sl_price)
+                                    trade.fee = 2.0 
 
-                            # LEVEL 3: Extreme Trail (+2.5% Move / +50% ROI)
-                            elif p_diff >= 0.025 and trade.fee < 3.0:
-                                log(f"EXTREME TRAIL: Price hit +50% ROI! Locking in +30% profit...", "warning")
-                                new_sl = entry * 1.015 if side == 'BUY' else entry * 0.985
-                                executor.set_tp_sl(trade.symbol, side, entry, config.TAKE_PROFIT + 0.01, 0, absolute_sl=new_sl)
-                                trade.fee = 3.0
-                        except Exception as e:
-                            print(f"[TRAIL] Error: {e}")
+                                # LEVEL 3: Extreme Trail (+2.5% Move / +50% ROI)
+                                elif p_diff >= 0.025 and trade.fee < 3.0:
+                                    log(f"EXTREME TRAIL: Price hit +50% ROI! Locking in +30% profit...", "warning")
+                                    new_sl = entry * 1.015 if side == 'BUY' else entry * 0.985
+                                    executor.set_tp_sl(trade.symbol, side, entry, config.TAKE_PROFIT + 0.01, 0, absolute_sl=new_sl)
+                                    trade.fee = 3.0
+                            except Exception as e:
+                                print(f"[TRAIL] Error: {e}")
+                        else:
+                            # Static TP mode: Just log status periodically
+                            if int(get_ist_now().second) % 15 == 0:
+                                ticker = client.futures_symbol_ticker(symbol=trade.symbol)
+                                price = float(ticker['price'])
+                                entry = trade.entry_price
+                                side = trade.side
+                                p_diff = (price - entry) / entry if side == 'BUY' else (entry - price) / entry
+                                log(f"STATIC TP MONITOR: {trade.symbol} | Progress: {p_diff*100:.2f}% towards TP", "info")
                         continue
 
                     # If position is 0, it means it was closed by TP or SL

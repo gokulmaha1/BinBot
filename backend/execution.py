@@ -209,20 +209,47 @@ class ExecutionEngine:
             except:
                 return False, err
 
-    def place_atomic_trade(self, symbol, side, qty, curr_price, tp_pct, sl_pct):
+    def calculate_static_tp_price(self, symbol, side, entry_price, target_roi, leverage):
+        """
+        Calculate static TP price that accounts for fees.
+        Binance Futures fees: ~0.04% maker, ~0.05% taker (round trip ~0.09-0.1%)
+        We add fee buffer to ensure net profit matches target ROI.
+        """
+        FEE_RATE = 0.001  # 0.1% total fee buffer (entry + exit)
+        
+        # Target ROI is in ROI terms, convert to price movement
+        # ROI = price_move * leverage - fees
+        # price_move = (ROI + fees) / leverage
+        required_price_move = (target_roi + FEE_RATE) / leverage
+        
+        if side == "BUY":
+            tp_price = entry_price * (1 + required_price_move)
+        else:
+            tp_price = entry_price * (1 - required_price_move)
+            
+        return self.round_price(symbol, tp_price)
+
+    def place_atomic_trade(self, symbol, side, qty, curr_price, tp_pct, sl_pct, static_tp_price=None):
         """
         Executes a sequential TRIPLE-STRIKE (Entry -> TP -> SL).
         Returns (results, error, tp_price, sl_price)
+        If static_tp_price is provided, uses it instead of calculating from tp_pct.
         """
         results = []
         exit_side = SIDE_SELL if side == SIDE_BUY else SIDE_BUY
         
         # 1. Calculate Prices
+        if static_tp_price is not None:
+            tp_price = self.round_price(symbol, static_tp_price)
+        else:
+            if side == SIDE_BUY:
+                tp_price = self.round_price(symbol, curr_price * (1 + tp_pct))
+            else:
+                tp_price = self.round_price(symbol, curr_price * (1 - tp_pct))
+                
         if side == SIDE_BUY:
-            tp_price = self.round_price(symbol, curr_price * (1 + tp_pct))
             sl_price = self.round_price(symbol, curr_price * (1 - sl_pct))
         else:
-            tp_price = self.round_price(symbol, curr_price * (1 - tp_pct))
             sl_price = self.round_price(symbol, curr_price * (1 + sl_pct))
 
         try:
