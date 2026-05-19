@@ -440,6 +440,15 @@
                         </select>
                     </div>
                     <div class="input-group">
+                        <label>Trailing TP
+                            <span class="tooltip">?<span class="tooltiptext"><strong>Smart Take Profit</strong>When ON, the bot uses trailing mechanics to catch higher peaks. When OFF, it sells instantly at standard Take Profit.</span></span>
+                        </label>
+                        <select id="cfgTTP">
+                            <option value="true">ON</option>
+                            <option value="false">OFF</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
                         <label>TTP Activate %
                             <span class="tooltip">?<span class="tooltiptext"><strong>Trailing TP Trigger</strong>The profit % at which the Trailing Take Profit (TTP) system turns on.<br><br><em>Ex: At 1.0%, the bot will ignore standard Take Profits and instead wait for the price to peak and reverse before selling.</em></span></span>
                         </label>
@@ -740,6 +749,11 @@
                 document.getElementById('cfgRiskPct').value = cfg.dynamic_risk_pct;
                 document.getElementById('cfgDCA').value = cfg.dca.toString();
                 document.getElementById('cfgTrailing').value = cfg.trailing_sl.toString();
+                if (cfg.trailing_tp !== undefined) {
+                    document.getElementById('cfgTTP').value = cfg.trailing_tp.toString();
+                } else {
+                    document.getElementById('cfgTTP').value = "true";
+                }
                 document.getElementById('cfgTTPAct').value = cfg.trailing_tp_activation;
                 document.getElementById('cfgTTPCall').value = cfg.trailing_tp_callback;
                 document.getElementById('cfgSymbols').value = cfg.symbols;
@@ -761,6 +775,7 @@
                 dynamic_risk_pct: document.getElementById('cfgRiskPct').value,
                 dca: document.getElementById('cfgDCA').value,
                 trailing_sl: document.getElementById('cfgTrailing').value,
+                trailing_tp: document.getElementById('cfgTTP').value,
                 trailing_tp_activation: document.getElementById('cfgTTPAct').value,
                 trailing_tp_callback: document.getElementById('cfgTTPCall').value,
                 symbols: document.getElementById('cfgSymbols').value,

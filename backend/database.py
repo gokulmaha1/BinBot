@@ -71,6 +71,7 @@ class Config(Base):
     dynamic_risk_pct = Column(Float, default=0.50)
     dca_enabled = Column(Boolean, default=False)
     trailing_sl_enabled = Column(Boolean, default=True)
+    trailing_tp_enabled = Column(Boolean, default=True)
     trailing_tp_activation = Column(Float, default=0.01) # 1.0% to start trailing
     trailing_tp_callback = Column(Float, default=0.002)  # 0.2% pullback to close
     symbols = Column(String, default="LABUSDT,PEPEUSDT,DOGSUSDT")

@@ -13,6 +13,11 @@ import asyncio
 import pandas as pd
 from collections import defaultdict, deque
 import time
+from pydantic import BaseModel
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 # Internal Imports
 from backend.database import init_db, SessionLocal, Trade, LogEntry, Config
@@ -90,10 +95,10 @@ async def read_root():
     return RedirectResponse(url="/dashboard/")
 
 @app.post("/api/login")
-async def login(data: dict, response: Response):
+async def login(data: LoginRequest, response: Response):
     user = os.getenv("DASHBOARD_USER", "admin")
     pw = os.getenv("DASHBOARD_PASS", "binbot_sniper_2026")
-    if data.get("username") == user and data.get("password") == pw:
+    if data.username == user and data.password == pw:
         response.set_cookie(key="binbot_session", value="active_sniper_session", httponly=True)
         return {"status": "success"}
     raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -123,6 +128,7 @@ async def get_config(request: Request):
         "dynamic_risk_pct": cfg.dynamic_risk_pct,
         "dca": cfg.dca_enabled,
         "trailing_sl": cfg.trailing_sl_enabled,
+        "trailing_tp": cfg.trailing_tp_enabled,
         "trailing_tp_activation": cfg.trailing_tp_activation,
         "trailing_tp_callback": cfg.trailing_tp_callback,
         "symbols": cfg.symbols,
@@ -143,6 +149,7 @@ async def update_config(data: dict, request: Request):
         cfg.dynamic_risk_pct = float(data.get("dynamic_risk_pct", 0.50))
         cfg.dca_enabled = str(data.get("dca")).lower() == "true"
         cfg.trailing_sl_enabled = str(data.get("trailing_sl")).lower() == "true"
+        cfg.trailing_tp_enabled = str(data.get("trailing_tp", "true")).lower() == "true"
         cfg.trailing_tp_activation = float(data.get("trailing_tp_activation", 0.01))
         cfg.trailing_tp_callback = float(data.get("trailing_tp_callback", 0.002))
         cfg.symbols = data.get("symbols", cfg.symbols)
@@ -519,7 +526,7 @@ async def bot_loop():
                     db_tmp.close()
 
                 # TTP Logic
-                if cfg.trailing_sl_enabled and profit_pct >= cfg.trailing_tp_activation:
+                if getattr(cfg, 'trailing_tp_enabled', True) and profit_pct >= cfg.trailing_tp_activation:
                     if any_open.side == "BUY":
                         drawdown = (any_open.peak_price - curr_p) / any_open.peak_price
                     else:
