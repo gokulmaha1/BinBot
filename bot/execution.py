@@ -23,7 +23,8 @@ def place_tp_sl(client, symbol, side, tp_price, sl_price):
             side=exit_side,
             type=FUTURE_ORDER_TYPE_TAKE_PROFIT_MARKET,
             stopPrice=tp_price,
-            closePosition=True
+            closePosition=True,
+            workingType="CONTRACT_PRICE"
         )
         
         # Stop Loss Order
@@ -32,7 +33,8 @@ def place_tp_sl(client, symbol, side, tp_price, sl_price):
             side=exit_side,
             type=FUTURE_ORDER_TYPE_STOP_MARKET,
             stopPrice=sl_price,
-            closePosition=True
+            closePosition=True,
+            workingType="CONTRACT_PRICE"
         )
         return True
     except Exception as e:
