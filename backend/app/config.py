@@ -55,37 +55,37 @@ class Settings(BaseSettings):
     TELEGRAM_CHAT_ID: Optional[str] = None
 
     # ── Risk Management (HARDCODED LIMITS — NOT OVERRIDABLE) ────
-    MAX_RISK_PER_TRADE: float = 0.01         # 1% of equity
-    MAX_DAILY_LOSS: float = 0.03             # 3% of starting daily equity
-    MAX_DRAWDOWN: float = 0.08               # 8% from equity peak
-    MAX_CONSECUTIVE_LOSSES: int = 3          # Pause after 3 consecutive losses
-    CONSECUTIVE_LOSS_COOLDOWN: int = 1800    # 30 minutes cooldown (seconds)
+    MAX_RISK_PER_TRADE: float = 0.02         # 2% of equity (aggressive)
+    MAX_DAILY_LOSS: float = 0.05             # 5% of starting daily equity
+    MAX_DRAWDOWN: float = 0.10               # 10% from equity peak
+    MAX_CONSECUTIVE_LOSSES: int = 5          # Pause after 5 consecutive losses
+    CONSECUTIVE_LOSS_COOLDOWN: int = 600     # 10 minutes cooldown (aggressive)
     MAX_ACTIVE_POSITIONS: int = 3
-    MAX_CORRELATED_POSITIONS: int = 1
-    CORRELATION_THRESHOLD: float = 0.85
+    MAX_CORRELATED_POSITIONS: int = 2
+    CORRELATION_THRESHOLD: float = 0.90
     MAX_LEVERAGE: int = 20
-    MAX_TRADES_PER_DAY: int = 10
-    CAPITAL_PER_TRADE_PCT: float = 0.20      # 20% of wallet per trade
+    MAX_TRADES_PER_DAY: int = 20
+    CAPITAL_PER_TRADE_PCT: float = 0.30      # 30% of wallet per trade (aggressive)
 
     # ── Signal Thresholds ────────────────────────────────────────
-    SIGNAL_SCORE_THRESHOLD: int = 55         # Minimum signal score (0-100)
-    ML_CONFIDENCE_THRESHOLD: float = 0.75    # Minimum ML confirmation (0-1)
+    SIGNAL_SCORE_THRESHOLD: int = 45         # Minimum signal score (aggressive)
+    ML_CONFIDENCE_THRESHOLD: float = 0.55    # Minimum ML confirmation (aggressive)
 
     # ── Scanner Settings ─────────────────────────────────────────
-    SCANNER_INTERVAL_SECONDS: int = 15
+    SCANNER_INTERVAL_SECONDS: int = 10       # Scan every 10s (aggressive)
     SCANNER_MIN_VOLUME_24H: float = 50_000_000.0   # $50M minimum
     SCANNER_MAX_SPREAD_PCT: float = 0.001           # 0.1%
     SCANNER_MIN_LISTING_DAYS: int = 30
     SCANNER_TOP_PAIRS: int = 20
     SCANNER_MANUAL_PAIRS: str = ""
 
-    # ── Take Profit Tiers ────────────────────────────────────────
-    TP1_RATIO: float = 1.0    # 1:1 R:R
-    TP1_CLOSE_PCT: float = 0.40   # Close 40%
-    TP2_RATIO: float = 2.0    # 1:2 R:R
+    # ── Take Profit Tiers (Aggressive — quick small profits) ────
+    TP1_RATIO: float = 0.5    # 0.5:1 R:R — take quick profit
+    TP1_CLOSE_PCT: float = 0.50   # Close 50% at first target
+    TP2_RATIO: float = 1.0    # 1:1 R:R
     TP2_CLOSE_PCT: float = 0.30   # Close 30%
-    TP3_RATIO: float = 3.0    # 1:3 R:R
-    TP3_CLOSE_PCT: float = 0.30   # Close remaining 30%
+    TP3_RATIO: float = 1.5    # 1.5:1 R:R
+    TP3_CLOSE_PCT: float = 0.20   # Close remaining 20%
 
     # ── Technical Indicators ─────────────────────────────────────
     EMA_FAST: int = 9
