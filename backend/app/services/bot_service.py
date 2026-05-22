@@ -272,7 +272,31 @@ class BotService:
 
                         try:
                             # Step 2: Extract features
-                            features = await self._features.extract(symbol)
+                            # Fetch klines from Binance to build DataFrame for feature extraction
+                            import pandas as pd
+                            try:
+                                klines_raw = await self._scanner._binance_client.futures_klines(
+                                    symbol=symbol,
+                                    interval="1h",
+                                    limit=200,
+                                )
+                                if len(klines_raw) < 50:
+                                    no_features_pairs.append(symbol)
+                                    continue
+
+                                df = pd.DataFrame(klines_raw, columns=[
+                                    'open_time', 'open', 'high', 'low', 'close', 'volume',
+                                    'close_time', 'quote_volume', 'trades', 'taker_buy_base',
+                                    'taker_buy_quote', 'ignore'
+                                ])
+                                for col in ['open', 'high', 'low', 'close', 'volume']:
+                                    df[col] = df[col].astype(float)
+                            except Exception as kline_err:
+                                logger.error(f"Failed to fetch klines for {symbol}: {kline_err}")
+                                no_features_pairs.append(symbol)
+                                continue
+
+                            features = await self._features.extract(df, symbol)
                             if features is None:
                                 no_features_pairs.append(symbol)
                                 continue

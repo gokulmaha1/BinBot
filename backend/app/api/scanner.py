@@ -43,8 +43,22 @@ async def get_ranked_pairs(
 
     if cached:
         import json
-        pairs = json.loads(cached)
-        return [PairRankResponse(**p) for p in pairs[:limit]]
+        raw_pairs = json.loads(cached)
+        # Map scanner cache field names to PairRankResponse schema
+        mapped = []
+        for p in raw_pairs[:limit]:
+            mapped.append(PairRankResponse(
+                symbol=p["symbol"],
+                price=p.get("price", 0),
+                volume_24h=p.get("volume_24h", 0),
+                open_interest=p.get("oi_change"),
+                atr=p.get("atr_pct") or p.get("atr"),
+                adx=p.get("adx"),
+                regime=p.get("regime"),
+                scanner_score=p.get("score", 0),
+                captured_at=p.get("scanned_at", ""),
+            ))
+        return mapped
 
     # Fallback to DB — get latest snapshot per symbol
     result = await db.execute(
