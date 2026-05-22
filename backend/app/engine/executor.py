@@ -419,6 +419,24 @@ class TradeExecutor:
             logger.error("Failed to cancel orders for %s: %s", symbol, exc)
             return False
 
+    async def cancel_tp_orders(self, symbol: str) -> int:
+        """Cancel only TAKE_PROFIT orders for a symbol. Returns count cancelled."""
+        if settings.is_paper:
+            return 0
+        cancelled = 0
+        try:
+            orders = await self._get_open_orders(symbol)
+            for order in orders:
+                if order.get("type") in ("TAKE_PROFIT_MARKET", "TAKE_PROFIT_LIMIT", "TAKE_PROFIT"):
+                    await self._cancel_order(symbol, order["orderId"])
+                    cancelled += 1
+            if cancelled:
+                logger.info("Cancelled %d TP orders for %s", cancelled, symbol)
+            return cancelled
+        except Exception as exc:
+            logger.error("Failed to cancel TP orders for %s: %s", symbol, exc)
+            return cancelled
+
     async def get_open_positions(self) -> list[dict]:
         """Fetch all open positions from Binance."""
         if settings.is_paper:

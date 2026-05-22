@@ -367,6 +367,7 @@ class PositionMonitor:
             trade.remaining_quantity = 0.0
             trade.close_reason = "TP3"
             self._peak_prices.pop(str(trade.id), None)
+            self._peak_prices.pop(f"{trade.id}_tp_cancelled", None)
 
             await self.db.commit()
 
@@ -421,6 +422,7 @@ class PositionMonitor:
             trade.remaining_quantity = 0.0
             trade.close_reason = "SL"
             self._peak_prices.pop(str(trade.id), None)
+            self._peak_prices.pop(f"{trade.id}_tp_cancelled", None)
 
             await self.db.commit()
 
@@ -442,6 +444,10 @@ class PositionMonitor:
         Activates once the trade is past breakeven (TP1_HIT or later).
         Trails the SL at ``TRAILING_STOP_PCT`` behind the peak price,
         updating the live Binance order every cycle.
+
+        When trailing activates for the first time, remaining TP orders
+        (TP2, TP3) are cancelled so the trailing SL manages the
+        remainder as a pure trailing take-profit.
         """
         trail_pct = settings.TRAILING_STOP_PCT
         activate_pct = settings.TRAILING_ACTIVATE_PCT
@@ -463,13 +469,22 @@ class PositionMonitor:
 
         if is_buy:
             # Update peak to highest price seen
-            if mark_price > current_peak:
+            peak_updated = mark_price > current_peak
+            if peak_updated:
                 current_peak = mark_price
                 self._peak_prices[trade_id_str] = current_peak
 
             # Don't trail until price has moved up enough from entry
             if current_peak < entry_price * (1 + activate_pct):
                 return
+
+            # On first trail activation, cancel TP2/TP3 orders so trailing
+            # SL manages the remainder
+            if peak_updated and not self._peak_prices.get(f"{trade_id_str}_tp_cancelled"):
+                cancelled = await self.executor.cancel_tp_orders(trade.symbol)
+                if cancelled > 0:
+                    self._peak_prices[f"{trade_id_str}_tp_cancelled"] = True
+                    logger.info("Trailing TP activated for %s — cancelled %d TP orders", trade.symbol, cancelled)
 
             # Trail distance from peak
             trail_sl = current_peak * (1 - trail_pct)
@@ -492,13 +507,21 @@ class PositionMonitor:
 
         elif is_sell:
             # Update low to lowest price seen
-            if current_peak == 0 or mark_price < current_peak:
+            peak_updated = current_peak == 0 or mark_price < current_peak
+            if peak_updated:
                 current_peak = mark_price
                 self._peak_prices[trade_id_str] = current_peak
 
             # Don't trail until price has moved down enough from entry
             if current_peak > entry_price * (1 - activate_pct):
                 return
+
+            # Cancel TP orders on first trail activation
+            if peak_updated and not self._peak_prices.get(f"{trade_id_str}_tp_cancelled"):
+                cancelled = await self.executor.cancel_tp_orders(trade.symbol)
+                if cancelled > 0:
+                    self._peak_prices[f"{trade_id_str}_tp_cancelled"] = True
+                    logger.info("Trailing TP activated for %s — cancelled %d TP orders", trade.symbol, cancelled)
 
             trail_sl = current_peak * (1 + trail_pct)
 
@@ -567,6 +590,7 @@ class PositionMonitor:
                 trade.remaining_quantity = 0.0
                 trade.close_reason = "sync"
                 self._peak_prices.pop(str(trade.id), None)
+                self._peak_prices.pop(f"{trade.id}_tp_cancelled", None)
 
                 if trade.trade_state == TradeState.ENTRY:
                     trade.trade_state = TradeState.SL_HIT
