@@ -9,6 +9,9 @@ services:
       - "8012:8000"
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://binbot:binbot@postgres:5432/binbot
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,6 +69,9 @@ services:
     command: celery -A celery_worker worker --loglevel=info --concurrency=2
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://binbot:binbot@postgres:5432/binbot
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       - redis
       - postgres
@@ -81,6 +87,9 @@ services:
     command: celery -A celery_worker beat --loglevel=info
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://binbot:binbot@postgres:5432/binbot
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       - redis
     restart: unless-stopped
