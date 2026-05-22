@@ -73,6 +73,21 @@ class BotService:
         redis = await get_redis()
 
         self._scanner = PairScanner(redis=redis)
+        # Initialize the scanner's Binance client so scan() can fetch data.
+        # We don't call scanner.start() because bot_service has its own loop.
+        from binance import AsyncClient
+        if settings.is_testnet:
+            self._scanner._binance_client = await AsyncClient.create(
+                api_key=settings.active_api_key,
+                api_secret=settings.active_api_secret,
+                testnet=True,
+            )
+        else:
+            self._scanner._binance_client = await AsyncClient.create(
+                api_key=settings.active_api_key,
+                api_secret=settings.active_api_secret,
+            )
+
         self._features = FeatureExtractor(redis=redis)
         self._regime = RegimeDetector()
         self._strategies = StrategyEngine()

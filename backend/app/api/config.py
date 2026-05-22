@@ -3,6 +3,7 @@ BinBot AI Auto Mode — Config API
 Bot settings CRUD and exchange account management.
 """
 
+import json
 import logging
 from typing import Optional
 
@@ -12,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.config import settings, TradingMode
-from app.deps import get_session, get_current_user
+from app.deps import get_session, get_current_user, get_redis
 from app.models import Bot, ExchangeAccount, ExchangeMode
 from app.services.crypto import encrypt, decrypt
 
@@ -162,6 +163,28 @@ async def update_config(
             updates[field] = val
 
     logger.info(f"Config updated: {updates}")
+
+    # Persist configurable settings to Redis so they survive restarts
+    try:
+        redis = await get_redis()
+        config_snapshot = {
+            "capital_per_trade_pct": settings.CAPITAL_PER_TRADE_PCT,
+            "trading_mode": settings.TRADING_MODE.value,
+            "tp1_ratio": settings.TP1_RATIO,
+            "tp1_close_pct": settings.TP1_CLOSE_PCT,
+            "tp2_ratio": settings.TP2_RATIO,
+            "tp2_close_pct": settings.TP2_CLOSE_PCT,
+            "tp3_ratio": settings.TP3_RATIO,
+            "tp3_close_pct": settings.TP3_CLOSE_PCT,
+            "scanner_min_volume_24h": settings.SCANNER_MIN_VOLUME_24H,
+            "scanner_top_pairs": settings.SCANNER_TOP_PAIRS,
+            "scanner_manual_pairs": settings.SCANNER_MANUAL_PAIRS,
+        }
+        await redis.set("binbot:config", json.dumps(config_snapshot))
+        logger.info("Config persisted to Redis")
+    except Exception as exc:
+        logger.warning(f"Failed to persist config to Redis: {exc}")
+
     return {"success": True, "updated": updates}
 
 

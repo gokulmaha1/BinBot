@@ -40,6 +40,9 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialized")
 
+    # Restore user-configurable settings from Redis (persist across restarts)
+    await _restore_config_from_redis()
+
     # Seed default strategies
     await _seed_strategies()
 
@@ -52,6 +55,50 @@ async def lifespan(app: FastAPI):
     await close_redis()
     await close_db()
     logger.info("Shutdown complete")
+
+async def _restore_config_from_redis():
+    """Restore user-configurable settings from Redis on startup."""
+    import json
+    try:
+        from app.deps import get_redis
+        redis = await get_redis()
+        raw = await redis.get("binbot:config")
+        if not raw:
+            logger.info("No saved config found in Redis — using defaults")
+            return
+
+        saved = json.loads(raw)
+        logger.info(f"Restoring saved config from Redis: {saved}")
+
+        if "capital_per_trade_pct" in saved:
+            settings.CAPITAL_PER_TRADE_PCT = saved["capital_per_trade_pct"]
+        if "trading_mode" in saved:
+            try:
+                settings.TRADING_MODE = TradingMode(saved["trading_mode"])
+            except ValueError:
+                pass
+        if "tp1_ratio" in saved:
+            settings.TP1_RATIO = saved["tp1_ratio"]
+        if "tp1_close_pct" in saved:
+            settings.TP1_CLOSE_PCT = saved["tp1_close_pct"]
+        if "tp2_ratio" in saved:
+            settings.TP2_RATIO = saved["tp2_ratio"]
+        if "tp2_close_pct" in saved:
+            settings.TP2_CLOSE_PCT = saved["tp2_close_pct"]
+        if "tp3_ratio" in saved:
+            settings.TP3_RATIO = saved["tp3_ratio"]
+        if "tp3_close_pct" in saved:
+            settings.TP3_CLOSE_PCT = saved["tp3_close_pct"]
+        if "scanner_min_volume_24h" in saved:
+            settings.SCANNER_MIN_VOLUME_24H = saved["scanner_min_volume_24h"]
+        if "scanner_top_pairs" in saved:
+            settings.SCANNER_TOP_PAIRS = saved["scanner_top_pairs"]
+        if "scanner_manual_pairs" in saved:
+            settings.SCANNER_MANUAL_PAIRS = saved["scanner_manual_pairs"]
+
+        logger.info(f"Config restored. Mode={settings.TRADING_MODE.value}, ManualPairs={settings.SCANNER_MANUAL_PAIRS}")
+    except Exception as exc:
+        logger.warning(f"Failed to restore config from Redis: {exc}")
 
 
 async def _seed_strategies():
