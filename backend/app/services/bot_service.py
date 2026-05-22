@@ -523,6 +523,7 @@ class BotService:
                             # EXECUTE THE TRADE (supports paper & live modes)
                             trade_result = await self._executor.execute_trade(
                                 signal=signal_record,
+                                entry_price=opp["signal"].entry_price,
                                 position_size=position_size,
                                 tp_levels=tp_levels,
                                 sl_price=sl_price,

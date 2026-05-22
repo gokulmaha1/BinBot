@@ -137,6 +137,7 @@ class TradeExecutor:
         sl_price: float,
         bot_id: UUID,
         strategy_name: str = "auto",
+        entry_price: float = 0.0,
     ) -> TradeResult:
         """
         Execute a complete trade:
@@ -154,7 +155,6 @@ class TradeExecutor:
         try:
             if settings.is_paper:
                 # ── Paper Mode Execution ─────────────────────────
-                entry_price = signal.price if hasattr(signal, "price") else signal.get("price", 0.0)
                 if entry_price <= 0:
                     # Fallback to Redis cache for mark price
                     try:
@@ -475,7 +475,7 @@ class TradeExecutor:
         await self._ensure_client()
         rounded_qty = await self.round_quantity(symbol, quantity)
         if rounded_qty <= 0:
-            logger.error("Quantity rounded to 0 for %s", symbol)
+            logger.error("Quantity rounded to 0 for %s (raw_qty=%s) — check balance and precision", symbol, quantity)
             return None
 
         for attempt in range(1, MAX_RETRIES + 1):
