@@ -399,6 +399,10 @@ class BotService:
 
                         except Exception as e:
                             logger.error(f"Error analyzing {symbol}: {e}")
+                            await self._log_to_db(
+                                LogLevel.ERROR, LogSource.DATA,
+                                f"❌ Error analyzing {symbol}: {e}"
+                            )
                             continue
 
                     # Log silent skips in summary
