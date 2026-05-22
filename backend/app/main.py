@@ -43,6 +43,9 @@ async def lifespan(app: FastAPI):
     # Seed default strategies
     await _seed_strategies()
 
+    # Resume active bots
+    await _resume_active_bots()
+
     yield
 
     # Shutdown
@@ -89,6 +92,26 @@ async def _seed_strategies():
             session.add(s)
         await session.commit()
         logger.info("Default strategies seeded")
+
+
+async def _resume_active_bots():
+    """Resume any bots that were running or paused before the server restarted."""
+    from app.db.session import async_session_factory
+    from app.models import Bot, BotStatus
+    from sqlalchemy import select
+
+    try:
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(Bot).where(Bot.status.in_([BotStatus.RUNNING, BotStatus.PAUSED]))
+            )
+            bots = result.scalars().all()
+            for bot in bots:
+                logger.info(f"Auto-resuming bot {bot.id} in state: {bot.status.value}")
+                is_paused = bot.status == BotStatus.PAUSED
+                await _bot_service.start(str(bot.id), paused=is_paused)
+    except Exception as e:
+        logger.error(f"Error resuming active bots: {e}", exc_info=True)
 
 
 # ── Create App ───────────────────────────────────────────────────

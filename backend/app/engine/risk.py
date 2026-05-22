@@ -74,7 +74,7 @@ class RiskManager:
     ``app.config.settings``.  No caller can bypass them.
     """
 
-    def __init__(self, db_session: AsyncSession, redis: Optional[object] = None) -> None:
+    def __init__(self, db_session: Optional[AsyncSession] = None, redis: Optional[object] = None) -> None:
         self.db = db_session
         self.redis = redis
 
@@ -84,10 +84,12 @@ class RiskManager:
 
     async def check_trade_allowed(
         self,
-        bot_id: UUID,
-        symbol: str,
-        side: str,
-        features: dict,
+        bot_id: Optional[UUID] = None,
+        symbol: Optional[str] = None,
+        side: Optional[str] = None,
+        features: Optional[dict] = None,
+        bot: Optional[Bot] = None,
+        session: Optional[AsyncSession] = None,
     ) -> RiskCheckResult:
         """
         Run the full pre-trade risk gate.
@@ -107,7 +109,14 @@ class RiskManager:
         warnings: list[str] = []
 
         try:
-            bot = await self._get_bot(bot_id)
+            if session is not None:
+                self.db = session
+            if bot_id is None and bot is not None:
+                bot_id = bot.id
+            if bot is None:
+                if bot_id is None:
+                    return RiskCheckResult(allowed=False, reason="bot or bot_id must be provided")
+                bot = await self._get_bot(bot_id)
             if bot is None:
                 return RiskCheckResult(allowed=False, reason="Bot not found")
 
@@ -287,7 +296,7 @@ class RiskManager:
         entry_price: float,
         sl_distance: float,
         side: str,
-        total_quantity: float,
+        total_quantity: float = 1.0,
         price_precision: int = 2,
         qty_precision: int = 3,
     ) -> TPLevels:

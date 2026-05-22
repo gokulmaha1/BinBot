@@ -94,16 +94,25 @@ async def start_bot(
         await db.flush()
 
     if bot.status == BotStatus.RUNNING:
-        return BotActionResponse(success=False, message="Bot is already running")
+        if _bot_service and not _bot_service._running:
+            logger.info("Bot status is RUNNING in DB but service is not running. Restarting service.")
+        else:
+            return BotActionResponse(success=False, message="Bot is already running")
 
     bot.status = BotStatus.RUNNING
     bot.started_at = datetime.utcnow()
     await db.flush()
 
     # Start the bot loop
-    await _bot_service.start(str(bot.id))
-    logger.info(f"Bot started for user {current_user['user_id']}")
+    try:
+        await _bot_service.start(str(bot.id))
+    except Exception as e:
+        logger.error(f"Failed to start bot service: {e}", exc_info=True)
+        bot.status = BotStatus.ERROR
+        await db.commit()
+        raise HTTPException(status_code=500, detail=f"Failed to start bot service: {str(e)}")
 
+    logger.info(f"Bot started for user {current_user['user_id']}")
     return BotActionResponse(success=True, message="AI Auto Mode started")
 
 

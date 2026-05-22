@@ -7,6 +7,7 @@ import asyncio
 import logging
 from datetime import datetime, date
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
@@ -41,7 +42,7 @@ class BotService:
         self._running = False
         self._paused = False
         self._task: Optional[asyncio.Task] = None
-        self._bot_id: Optional[str] = None
+        self._bot_id: Optional[UUID] = None
 
         # Engine modules (lazy-loaded to avoid circular imports)
         self._scanner = None
@@ -84,23 +85,37 @@ class BotService:
 
         logger.info("All engine modules initialized")
 
-    async def start(self, bot_id: str):
+    async def start(self, bot_id: str, paused: bool = False):
         """Start the AI Auto Mode loop."""
+        if isinstance(bot_id, str):
+            bot_uuid = UUID(bot_id)
+        else:
+            bot_uuid = bot_id
+
         if self._running:
-            logger.warning("Bot is already running")
+            if self._paused and not paused:
+                self._paused = False
+                logger.info("AI Auto Mode resumed from paused state")
+                if self._notifier:
+                    await self._notifier.notify_bot_status("running", "AI Auto Mode resumed")
+            else:
+                logger.warning("Bot is already running")
             return
 
-        self._bot_id = bot_id
+        self._bot_id = bot_uuid
         self._running = True
-        self._paused = False
+        self._paused = paused
 
         await self._init_engines()
 
         self._task = asyncio.create_task(self._main_loop())
-        logger.info(f"AI Auto Mode started for bot {bot_id}")
+        logger.info(f"AI Auto Mode started for bot {bot_uuid}")
 
         if self._notifier:
-            await self._notifier.notify_bot_status("running", "AI Auto Mode activated")
+            await self._notifier.notify_bot_status(
+                "paused" if paused else "running",
+                "AI Auto Mode activated (paused)" if paused else "AI Auto Mode activated"
+            )
 
     async def stop(self):
         """Stop the bot loop."""
@@ -336,12 +351,15 @@ class BotService:
                             balance = await self._executor.get_balance()
                             equity = balance * settings.CAPITAL_PER_TRADE_PCT
 
-                            position_size = await self._risk.calculate_position_size(
+                            # Fetch quantity precision from executor asynchronously
+                            qty_precision = await self._executor.get_quantity_precision(opp["symbol"])
+
+                            position_size = self._risk.calculate_position_size(
                                 equity=equity,
                                 entry_price=opp["signal"].entry_price,
                                 sl_distance=opp["signal"].sl_distance,
                                 symbol=opp["symbol"],
-                                executor=self._executor,
+                                qty_precision=qty_precision,
                             )
 
                             # Calculate TP levels
@@ -349,76 +367,47 @@ class BotService:
                                 entry_price=opp["signal"].entry_price,
                                 sl_distance=opp["signal"].sl_distance,
                                 side=opp["signal"].side,
+                                total_quantity=position_size.quantity,
                             )
 
-                            # Paper mode: simulate without placing orders
-                            if settings.is_paper:
-                                await self._log_to_db(
-                                    LogLevel.TRADE, LogSource.EXECUTOR,
-                                    f"[PAPER] Would execute {opp['signal'].side} "
-                                    f"{opp['symbol']} | Qty: {position_size.quantity} | "
-                                    f"Leverage: {position_size.leverage}x | "
-                                    f"Score: {opp['scored'].total_score} | "
-                                    f"ML: {opp['ml_result'].probability:.1%}"
-                                )
-                                # Record signal as accepted
-                                await self._record_signal(
-                                    session, bot.id, opp["symbol"], opp["signal"],
-                                    opp["scored"], opp["ml_result"].probability,
-                                    SignalStatus.ACCEPTED, None, opp["regime"].regime,
-                                )
-                                continue
+                            # Record signal first as ACCEPTED so its ID is available for the trade record
+                            signal_record = await self._record_signal(
+                                session, bot.id, opp["symbol"], opp["signal"],
+                                opp["scored"], opp["ml_result"].probability,
+                                SignalStatus.ACCEPTED, None, opp["regime"].regime,
+                            )
 
-                            # EXECUTE THE TRADE
+                            # Bind DB session to executor dynamically
+                            self._executor.db = session
+
+                            # Calculate SL price
+                            sl_price = (
+                                opp["signal"].entry_price - opp["signal"].sl_distance
+                                if opp["signal"].side in ("BUY", SignalSide.BUY)
+                                else opp["signal"].entry_price + opp["signal"].sl_distance
+                            )
+
+                            # EXECUTE THE TRADE (supports paper & live modes)
                             trade_result = await self._executor.execute_trade(
-                                symbol=opp["symbol"],
-                                side=opp["signal"].side,
-                                quantity=position_size.quantity,
-                                leverage=position_size.leverage,
-                                sl_price=opp["signal"].entry_price - opp["signal"].sl_distance
-                                if opp["signal"].side == "BUY"
-                                else opp["signal"].entry_price + opp["signal"].sl_distance,
+                                signal=signal_record,
+                                position_size=position_size,
                                 tp_levels=tp_levels,
+                                sl_price=sl_price,
+                                bot_id=bot.id,
+                                strategy_name=opp["signal"].strategy_name,
                             )
 
                             if trade_result and trade_result.success:
-                                # Record signal
-                                signal_record = await self._record_signal(
-                                    session, bot.id, opp["symbol"], opp["signal"],
-                                    opp["scored"], opp["ml_result"].probability,
-                                    SignalStatus.ACCEPTED, None, opp["regime"].regime,
-                                )
-
-                                # Record trade
-                                trade = Trade(
-                                    bot_id=bot.id,
-                                    signal_id=signal_record.id if signal_record else None,
-                                    symbol=opp["symbol"],
-                                    side=SignalSide(opp["signal"].side),
-                                    strategy_name=opp["signal"].strategy_name,
-                                    leverage=position_size.leverage,
-                                    entry_price=trade_result.entry_price,
-                                    quantity=position_size.quantity,
-                                    remaining_quantity=position_size.quantity,
-                                    sl_price=trade_result.sl_price,
-                                    tp1_price=tp_levels.tp1_price,
-                                    tp2_price=tp_levels.tp2_price,
-                                    tp3_price=tp_levels.tp3_price,
-                                    status=TradeStatus.OPEN,
-                                    binance_order_id=trade_result.order_id,
-                                    entry_time=datetime.utcnow(),
-                                )
-                                session.add(trade)
-
                                 bot.trades_today += 1
                                 await session.commit()
 
+                                prefix = "[PAPER] " if settings.is_paper else ""
                                 await self._log_to_db(
                                     LogLevel.TRADE, LogSource.EXECUTOR,
-                                    f"🚀 TRADE OPENED | {opp['signal'].side} {opp['symbol']} | "
+                                    f"🚀 {prefix}TRADE OPENED | {opp['signal'].side} {opp['symbol']} | "
                                     f"Entry: {trade_result.entry_price} | "
-                                    f"SL: {trade_result.sl_price} | "
-                                    f"TP1: {tp_levels.tp1_price} | "
+                                    f"SL: {sl_price} | "
+                                    f"TP1: {tp_levels.tp1.price} | "
                                     f"Leverage: {position_size.leverage}x | "
                                     f"Score: {opp['scored'].total_score} | "
                                     f"ML: {opp['ml_result'].probability:.1%}"
@@ -433,8 +422,8 @@ class BotService:
                                         entry_price=trade_result.entry_price,
                                         quantity=position_size.quantity,
                                         leverage=position_size.leverage,
-                                        sl_price=trade_result.sl_price,
-                                        tp1_price=tp_levels.tp1_price,
+                                        sl_price=sl_price,
+                                        tp1_price=tp_levels.tp1.price,
                                         score=opp["scored"].total_score,
                                         ml_confidence=opp["ml_result"].probability,
                                     )
@@ -448,6 +437,16 @@ class BotService:
                                     "entry_price": trade_result.entry_price,
                                     "strategy": opp["signal"].strategy_name,
                                 })
+                            else:
+                                # Revert the signal record status to REJECTED with error
+                                signal_record.status = SignalStatus.REJECTED
+                                signal_record.reject_reason = trade_result.error if trade_result else "Execution failed"
+                                await session.commit()
+
+                                await self._log_to_db(
+                                    LogLevel.ERROR, LogSource.EXECUTOR,
+                                    f"Failed to execute trade for {opp['symbol']}: {signal_record.reject_reason}"
+                                )
 
                         except Exception as e:
                             logger.error(f"Error executing trade for {opp['symbol']}: {e}")

@@ -75,7 +75,7 @@ class TradeExecutor:
     in the database.
     """
 
-    def __init__(self, client: Any, db_session: AsyncSession) -> None:
+    def __init__(self, client: Any = None, db_session: Optional[AsyncSession] = None) -> None:
         """
         Args:
             client: ``binance.AsyncClient`` instance (or testnet client).
@@ -85,6 +85,45 @@ class TradeExecutor:
         self.db = db_session
         self._exchange_info_cache: Optional[dict] = None
         self._exchange_info_ts: float = 0.0
+
+    async def _ensure_client(self) -> None:
+        """Ensure the Binance client is initialized if not in paper mode."""
+        if settings.is_paper:
+            return
+        if self.client is not None:
+            return
+
+        from binance import AsyncClient
+        if settings.is_testnet:
+            self.client = await AsyncClient.create(
+                api_key=settings.active_api_key,
+                api_secret=settings.active_api_secret,
+                testnet=True,
+            )
+        else:
+            self.client = await AsyncClient.create(
+                api_key=settings.active_api_key,
+                api_secret=settings.active_api_secret,
+            )
+
+    async def get_balance(self) -> float:
+        """Get the wallet balance in USDT."""
+        if settings.is_paper:
+            return 10000.0
+
+        await self._ensure_client()
+        if not self.client:
+            return 0.0
+
+        try:
+            account = await self.client.futures_account()
+            for asset in account.get("assets", []):
+                if asset.get("asset") == "USDT":
+                    return float(asset.get("walletBalance", 0.0))
+            return 0.0
+        except Exception as e:
+            logger.error(f"Error fetching Binance balance: {e}")
+            return 0.0
 
     # ─────────────────────────────────────────────────────────────
     #  FULL TRADE EXECUTION
@@ -113,6 +152,88 @@ class TradeExecutor:
         leverage: int = position_size.leverage if hasattr(position_size, "leverage") else position_size["leverage"]
 
         try:
+            if settings.is_paper:
+                # ── Paper Mode Execution ─────────────────────────
+                entry_price = signal.price if hasattr(signal, "price") else signal.get("price", 0.0)
+                if entry_price <= 0:
+                    # Fallback to Redis cache for mark price
+                    try:
+                        from app.deps import get_redis
+                        redis = await get_redis()
+                        raw = await redis.get(f"binbot:market:mark:{symbol.upper()}")
+                        if raw:
+                            entry_price = float(raw)
+                    except Exception:
+                        pass
+                if entry_price <= 0:
+                    entry_price = 1.0  # Safe fallback
+
+                # Create mock entry order
+                entry_order = OrderResult(
+                    order_id=f"paper_{uuid.uuid4().hex[:12]}",
+                    client_order_id=f"paper_cl_{uuid.uuid4().hex[:12]}",
+                    symbol=symbol,
+                    side=side,
+                    order_type="MARKET",
+                    status="FILLED",
+                    price=entry_price,
+                    avg_price=entry_price,
+                    quantity=quantity,
+                    filled_qty=quantity,
+                )
+
+                # Create mock TP orders
+                tp_orders = []
+                exit_side = "SELL" if side in ("BUY", SignalSide.BUY) else "BUY"
+                for i, tp_level in enumerate([tp_levels.tp1, tp_levels.tp2, tp_levels.tp3], 1):
+                    tp_orders.append(
+                        OrderResult(
+                            order_id=f"paper_tp{i}_{uuid.uuid4().hex[:12]}",
+                            symbol=symbol,
+                            side=exit_side,
+                            order_type="TAKE_PROFIT_MARKET",
+                            status="NEW",
+                            price=tp_level.price,
+                            quantity=tp_level.quantity,
+                        )
+                    )
+
+                # Create mock SL order
+                sl_order = OrderResult(
+                    order_id=f"paper_sl_{uuid.uuid4().hex[:12]}",
+                    symbol=symbol,
+                    side=exit_side,
+                    order_type="STOP_MARKET",
+                    status="NEW",
+                    price=sl_price,
+                )
+
+                # Record trade in DB
+                trade_id = await self._record_trade(
+                    bot_id=bot_id,
+                    signal=signal,
+                    symbol=symbol,
+                    side=side,
+                    strategy_name=strategy_name,
+                    leverage=leverage,
+                    entry_price=entry_price,
+                    quantity=quantity,
+                    sl_price=sl_price,
+                    tp_levels=tp_levels,
+                    entry_order=entry_order,
+                    slippage=0.0,
+                )
+
+                return TradeResult(
+                    success=True,
+                    trade_id=trade_id,
+                    entry_price=entry_price,
+                    entry_order=entry_order,
+                    tp_orders=tp_orders,
+                    sl_order=sl_order,
+                    slippage=0.0,
+                )
+
             # ── 1. Account setup ─────────────────────────────────
             await self._setup_account(symbol, leverage)
 
@@ -205,6 +326,17 @@ class TradeExecutor:
 
     async def close_position(self, symbol: str, quantity: float, reason: str = "manual") -> Optional[OrderResult]:
         """Close a position via market order."""
+        if settings.is_paper:
+            logger.info("[PAPER] Position closed for %s qty=%s reason=%s", symbol, quantity, reason)
+            return OrderResult(
+                order_id=f"paper_close_{uuid.uuid4().hex[:12]}",
+                symbol=symbol,
+                side="SELL",
+                order_type="MARKET",
+                status="FILLED",
+                quantity=quantity,
+                filled_qty=quantity,
+            )
         try:
             # Determine current side from position
             positions = await self.get_open_positions()
@@ -235,6 +367,16 @@ class TradeExecutor:
 
         Cancels the old SL and places a new STOP_MARKET.
         """
+        if settings.is_paper:
+            logger.info("[PAPER] SL modified for %s to %.4f", symbol, new_sl_price)
+            return OrderResult(
+                order_id=f"paper_sl_{uuid.uuid4().hex[:12]}",
+                symbol=symbol,
+                side="SELL",
+                order_type="STOP_MARKET",
+                status="NEW",
+                price=new_sl_price,
+            )
         try:
             # Cancel existing SL
             open_orders = await self._get_open_orders(symbol)
@@ -263,7 +405,10 @@ class TradeExecutor:
 
     async def cancel_orders(self, symbol: str) -> bool:
         """Cancel all open orders for a symbol."""
+        if settings.is_paper:
+            return True
         try:
+            await self._ensure_client()
             await self.client.futures_cancel_all_open_orders(symbol=symbol)
             logger.info("All open orders cancelled for %s", symbol)
             return True
@@ -273,7 +418,10 @@ class TradeExecutor:
 
     async def get_open_positions(self) -> list[dict]:
         """Fetch all open positions from Binance."""
+        if settings.is_paper:
+            return []
         try:
+            await self._ensure_client()
             account = await self.client.futures_account()
             positions = [
                 p for p in account.get("positions", [])
@@ -324,6 +472,7 @@ class TradeExecutor:
 
     async def _place_market_order(self, symbol: str, side: str, quantity: float) -> Optional[OrderResult]:
         """Place a market order with retry logic."""
+        await self._ensure_client()
         rounded_qty = await self.round_quantity(symbol, quantity)
         if rounded_qty <= 0:
             logger.error("Quantity rounded to 0 for %s", symbol)
@@ -354,6 +503,7 @@ class TradeExecutor:
         label: str,
     ) -> Optional[OrderResult]:
         """Place a TAKE_PROFIT_MARKET order with retry."""
+        await self._ensure_client()
         rounded_qty = await self.round_quantity(symbol, quantity)
         rounded_price = await self.round_price(symbol, stop_price)
 
@@ -390,6 +540,7 @@ class TradeExecutor:
         stop_price: float,
     ) -> Optional[OrderResult]:
         """Place a STOP_MARKET order with retry. Uses closePosition for full SL."""
+        await self._ensure_client()
         rounded_price = await self.round_price(symbol, stop_price)
 
         for attempt in range(1, MAX_RETRIES + 1):
@@ -420,6 +571,7 @@ class TradeExecutor:
     async def _setup_account(self, symbol: str, leverage: int) -> None:
         """Set leverage and isolated margin for the symbol."""
         try:
+            await self._ensure_client()
             await self.client.futures_change_leverage(symbol=symbol, leverage=leverage)
         except Exception as exc:
             logger.debug("Leverage set note for %s: %s", symbol, exc)
@@ -438,6 +590,7 @@ class TradeExecutor:
     async def _get_open_orders(self, symbol: str) -> list[dict]:
         """Fetch open orders for a symbol."""
         try:
+            await self._ensure_client()
             return await self.client.futures_get_open_orders(symbol=symbol)
         except Exception as exc:
             logger.error("Failed to get open orders for %s: %s", symbol, exc)
@@ -446,6 +599,7 @@ class TradeExecutor:
     async def _cancel_order(self, symbol: str, order_id: str) -> bool:
         """Cancel a single order by ID."""
         try:
+            await self._ensure_client()
             await self.client.futures_cancel_order(symbol=symbol, orderId=order_id)
             return True
         except Exception as exc:
@@ -472,6 +626,7 @@ class TradeExecutor:
         import time
         now = time.time()
         if self._exchange_info_cache is None or (now - self._exchange_info_ts) > 300:
+            await self._ensure_client()
             self._exchange_info_cache = await self.client.futures_exchange_info()
             self._exchange_info_ts = now
         return self._exchange_info_cache

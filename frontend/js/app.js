@@ -147,10 +147,12 @@ function initSocket() {
         const lcon = document.getElementById('logsContainer');
         if (lcon) {
             const entry = document.createElement('div');
-            entry.className = `log-entry ${data.level === 'error' ? 'log-error' : (data.level === 'warning' ? 'log-warn' : (data.level === 'success' ? 'log-success' : ''))}`;
+            const levelClass = data.level === 'error' ? 'error' : (data.level === 'warning' ? 'warning' : (data.level === 'trade' ? 'success' : 'info'));
+            const levelColor = data.level === 'error' ? '#ef4444' : (data.level === 'warning' ? '#f59e0b' : (data.level === 'trade' ? '#22c55e' : '#3b82f6'));
+            entry.className = `log-line ${levelClass}`;
             entry.innerHTML = `
                 <span style="color: #64748b">${new Date().toLocaleTimeString()}</span>
-                <b style="color: ${data.level === 'error' ? '#ef4444' : (data.level === 'warning' ? '#f59e0b' : (data.level === 'success' ? '#22c55e' : '#3b82f6'))}">${data.level.toUpperCase()}</b>
+                <b style="color: ${levelColor}">${data.level.toUpperCase()}</b>
                 ${data.message}
             `;
             lcon.insertBefore(entry, lcon.firstChild);
@@ -285,17 +287,23 @@ async function updateHeaderStats() {
             const pnlElem = document.getElementById('hdr-daily-pnl');
             const activeElem = document.getElementById('hdr-active-trades');
             
-            if (balanceElem) balanceElem.innerText = `$${stats.balance.toFixed(2)}`;
+            if (balanceElem) {
+                const balance = typeof stats.balance === 'number' ? stats.balance : 0;
+                balanceElem.innerText = `$${balance.toFixed(2)}`;
+            }
             if (pnlElem) {
-                pnlElem.innerText = `${stats.today_pnl >= 0 ? '+' : ''}$${stats.today_pnl.toFixed(2)}`;
-                pnlElem.className = `metric-value ${stats.today_pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
+                const todayPnl = typeof stats.today_pnl === 'number' ? stats.today_pnl : 0;
+                pnlElem.innerText = `${todayPnl >= 0 ? '+' : ''}$${todayPnl.toFixed(2)}`;
+                pnlElem.className = `metric-value ${todayPnl >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
             }
             if (activeElem) activeElem.innerText = `${stats.active_positions} / 3`;
         }
         
         if (statusRes && statusRes.ok) {
             const status = await statusRes.json();
-            updateBotStatusBadge(status.running ? 'RUNNING' : 'IDLE');
+            if (status && status.status) {
+                updateBotStatusBadge(status.status.toUpperCase());
+            }
         }
     } catch (e) {
         console.error("Error updating header stats:", e);

@@ -143,13 +143,17 @@ async function loadLogs() {
         const container = document.getElementById('logsContainer');
         if (!container) return;
         
-        container.innerHTML = logs.map(l => `
-            <div class="log-entry ${l.level === 'error' ? 'log-error' : (l.level === 'warning' ? 'log-warn' : (l.level === 'success' ? 'log-success' : ''))}">
-                <span style="color: #64748b">${new Date(l.timestamp).toLocaleTimeString()}</span>
-                <b style="color: ${l.level === 'error' ? '#ef4444' : (l.level === 'warning' ? '#f59e0b' : (l.level === 'success' ? '#22c55e' : '#3b82f6'))}">${l.level.toUpperCase()}</b>
-                ${l.message}
-            </div>
-        `).join('');
+        container.innerHTML = logs.map(l => {
+            const levelClass = l.level === 'error' ? 'error' : (l.level === 'warning' ? 'warning' : (l.level === 'trade' ? 'success' : 'info'));
+            const levelColor = l.level === 'error' ? '#ef4444' : (l.level === 'warning' ? '#f59e0b' : (l.level === 'trade' ? '#22c55e' : '#3b82f6'));
+            return `
+                <div class="log-line ${levelClass}">
+                    <span style="color: #64748b">${new Date(l.timestamp).toLocaleTimeString()}</span>
+                    <b style="color: ${levelColor}">${l.level.toUpperCase()}</b>
+                    ${l.message}
+                </div>
+            `;
+        }).join('');
     } catch (e) {
         console.error("Error loading logs:", e);
     }

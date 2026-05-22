@@ -47,10 +47,10 @@ class PositionMonitor:
 
     def __init__(
         self,
-        client: Any,
-        db_session: AsyncSession,
-        executor: Any,
-        risk_manager: Any,
+        client: Any = None,
+        db_session: Optional[AsyncSession] = None,
+        executor: Any = None,
+        risk_manager: Any = None,
     ) -> None:
         """
         Args:
@@ -64,6 +64,71 @@ class PositionMonitor:
         self.executor = executor
         self.risk = risk_manager
         self._running: bool = False
+
+    async def check_positions(
+        self,
+        bot_id: UUID,
+        session: AsyncSession,
+        executor: Any,
+        risk_manager: Any,
+        notifier: Any = None,
+    ) -> None:
+        """
+        Single run of open positions check.
+        Used by the main orchestrator loop.
+        """
+        self.db = session
+        self.executor = executor
+        self.risk = risk_manager
+        self.notifier = notifier
+
+        if not self.client and hasattr(executor, "client"):
+            self.client = executor.client
+
+        await self._ensure_client()
+        await self._monitor_cycle(bot_id)
+
+    async def _ensure_client(self) -> None:
+        """Ensure client is initialized if needed."""
+        if settings.is_paper:
+            return
+        if self.client is not None:
+            return
+        if self.executor and hasattr(self.executor, "client") and self.executor.client is not None:
+            self.client = self.executor.client
+            return
+
+        from binance import AsyncClient
+        if settings.is_testnet:
+            self.client = await AsyncClient.create(
+                api_key=settings.active_api_key,
+                api_secret=settings.active_api_secret,
+                testnet=True,
+            )
+        else:
+            self.client = await AsyncClient.create(
+                api_key=settings.active_api_key,
+                api_secret=settings.active_api_secret,
+            )
+
+    async def _get_mark_price_live(self, symbol: str, binance_positions: list[dict]) -> float:
+        """Extract mark price for a symbol, falling back to Redis if in paper mode or list is empty."""
+        for pos in binance_positions:
+            if pos.get("symbol") == symbol:
+                val = float(pos.get("markPrice", 0))
+                if val > 0:
+                    return val
+
+        # Fallback to Redis
+        try:
+            from app.deps import get_redis
+            redis = await get_redis()
+            raw = await redis.get(f"binbot:market:mark:{symbol.upper()}")
+            if raw:
+                return float(raw)
+        except Exception as e:
+            logger.error("Failed to fetch mark price from Redis for %s: %s", symbol, e)
+        return 0.0
 
     # ─────────────────────────────────────────────────────────────
     #  PUBLIC — MAIN LOOP
@@ -137,7 +202,7 @@ class PositionMonitor:
         - Check TP/SL hits and advance state
         """
         symbol = trade.symbol
-        mark_price = self._get_mark_price(symbol, binance_positions)
+        mark_price = await self._get_mark_price_live(symbol, binance_positions)
         if mark_price <= 0:
             return
 
@@ -312,6 +377,9 @@ class PositionMonitor:
         This handles cases where TP/SL filled on Binance and the
         monitor missed the exact moment.
         """
+        if settings.is_paper:
+            return
+
         binance_symbols = {
             p["symbol"] for p in binance_positions
             if float(p.get("positionAmt", 0)) != 0

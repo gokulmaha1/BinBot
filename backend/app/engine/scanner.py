@@ -65,8 +65,8 @@ class PairScanner:
     ``market_snapshots`` database table.
     """
 
-    def __init__(self) -> None:
-        self._redis: Optional[aioredis.Redis] = None
+    def __init__(self, redis: Optional[aioredis.Redis] = None) -> None:
+        self._redis: Optional[aioredis.Redis] = redis
         self._binance_client: Optional[AsyncClient] = None
         self._running: bool = False
         self._scan_task: Optional[asyncio.Task] = None
