@@ -495,6 +495,14 @@ class BotService:
                                 qty_precision=qty_precision,
                             )
 
+                            # Skip if position size is 0 (e.g., below minimum notional)
+                            if position_size.quantity <= 0:
+                                await self._log_to_db(
+                                    LogLevel.WARNING, LogSource.RISK,
+                                    f"⏭️ {opp['symbol']}: Position size too small (notional < $5 or invalid inputs)"
+                                )
+                                continue
+
                             # Calculate TP levels
                             tp_levels = self._risk.calculate_tp_levels(
                                 entry_price=opp["signal"].entry_price,

@@ -256,7 +256,7 @@ class TradeExecutor:
                 entry_price = await self._get_entry_from_position(symbol) or 0.0
 
             # Slippage tracking
-            requested_price = signal.price if hasattr(signal, "price") else signal.get("price", entry_price)
+            requested_price = entry_price or signal.price if hasattr(signal, "price") else entry_price
             slippage = abs(entry_price - requested_price) / requested_price if requested_price > 0 else 0.0
 
             # ── 4. Protection orders (TP + SL) ───────────────────

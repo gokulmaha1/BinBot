@@ -265,6 +265,15 @@ class RiskManager:
                 actual_risk * 100,
             )
 
+        # Binance minimum notional check ($5 USDT for most futures pairs)
+        MIN_NOTIONAL = 5.0
+        if notional_value < MIN_NOTIONAL:
+            logger.warning(
+                "Notional $%.2f below minimum $%.0f for %s — skipping trade",
+                notional_value, MIN_NOTIONAL, symbol,
+            )
+            return PositionSize(quantity=0.0, leverage=1, risk_amount=0.0, risk_pct=0.0)
+
         # Apply Binance precision
         quantity = round(quantity, qty_precision)
         risk_pct = (quantity * sl_distance) / equity if equity > 0 else 0.0
