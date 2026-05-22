@@ -126,26 +126,32 @@ class PositionMonitor:
 
     async def _ensure_client(self) -> None:
         """Ensure client is initialized if needed."""
-        if settings.is_paper:
-            return
         if self.client is not None:
             return
         if self.executor and hasattr(self.executor, "client") and self.executor.client is not None:
             self.client = self.executor.client
             return
 
+        if not settings.active_api_key:
+            self.client = None
+            return
+
         from binance import AsyncClient
-        if settings.is_testnet:
-            self.client = await AsyncClient.create(
-                api_key=settings.active_api_key,
-                api_secret=settings.active_api_secret,
-                testnet=True,
-            )
-        else:
-            self.client = await AsyncClient.create(
-                api_key=settings.active_api_key,
-                api_secret=settings.active_api_secret,
-            )
+        try:
+            if settings.is_testnet:
+                self.client = await AsyncClient.create(
+                    api_key=settings.active_api_key,
+                    api_secret=settings.active_api_secret,
+                    testnet=True,
+                )
+            else:
+                self.client = await AsyncClient.create(
+                    api_key=settings.active_api_key,
+                    api_secret=settings.active_api_secret,
+                )
+        except Exception as exc:
+            logger.error("Failed to create Binance client for monitor: %s", exc)
+            self.client = None
 
     async def _get_mark_price_live(self, symbol: str, binance_positions: list[dict]) -> float:
         """Extract mark price for a symbol, falling back to Redis if in paper mode or list is empty."""
@@ -207,13 +213,11 @@ class PositionMonitor:
 
     async def _monitor_cycle(self, bot_id: UUID) -> None:
         """Single monitoring pass over all open trades."""
-        # Fetch open trades from DB
-        open_trades = await self._get_open_trades(bot_id)
-        if not open_trades:
-            return
-
         # Fetch live positions from Binance
         binance_positions = await self._fetch_binance_positions()
+
+        # Fetch open trades from DB
+        open_trades = await self._get_open_trades(bot_id)
 
         for trade in open_trades:
             try:
@@ -441,9 +445,6 @@ class PositionMonitor:
         This handles cases where TP/SL filled on Binance and the
         monitor missed the exact moment.
         """
-        if settings.is_paper:
-            return
-
         binance_symbols = {
             p["symbol"] for p in binance_positions
             if float(p.get("positionAmt", 0)) != 0
@@ -500,6 +501,8 @@ class PositionMonitor:
 
     async def _fetch_binance_positions(self) -> list[dict]:
         """Fetch positions from Binance with error handling."""
+        if self.client is None:
+            return []
         try:
             account = await self.client.futures_account()
             return account.get("positions", [])

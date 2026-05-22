@@ -14,7 +14,8 @@ from sqlalchemy import select, desc, func, and_
 from sqlalchemy.orm import selectinload
 
 from app.deps import get_session, get_current_user
-from app.models import Trade, TradeStatus, TradeState, Bot, SignalSide
+from app.models import Trade, TradeStatus, TradeState, Bot, SignalSide, Position
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/trades", tags=["Trades"])
@@ -279,3 +280,134 @@ async def update_protection(
     logger.info(f"Protection updated for trade {trade_id}")
 
     return {"success": True, "message": "Protection levels updated"}
+
+
+@router.post("/sync")
+async def sync_positions(
+    db: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Manually sync DB trade records with real Binance positions.
+    - Closes DB trades whose symbols no longer have an open position on Binance.
+    - Creates DB records for positions on Binance not tracked in DB.
+    """
+    bot_result = await db.execute(
+        select(Bot.id).where(Bot.user_id == current_user["user_id"]).limit(1)
+    )
+    bot_id = bot_result.scalar_one_or_none()
+    if not bot_id:
+        return {"synced": 0, "closed": 0, "created": 0, "errors": ["No bot found"]}
+
+    # ── Fetch open DB trades ──────────────────────────────────
+    result = await db.execute(
+        select(Trade).where(
+            and_(
+                Trade.bot_id == bot_id,
+                Trade.status.in_([TradeStatus.OPEN, TradeStatus.PARTIAL_TP]),
+            )
+        )
+    )
+    db_trades: list[Trade] = list(result.scalars().all())
+    db_symbols = {t.symbol: t for t in db_trades}
+
+    # ── Fetch Binance positions ───────────────────────────────
+    from binance import AsyncClient
+    binance_client = None
+    try:
+        if settings.is_testnet:
+            binance_client = await AsyncClient.create(
+                api_key=settings.active_api_key,
+                api_secret=settings.active_api_secret,
+                testnet=True,
+            )
+        else:
+            binance_client = await AsyncClient.create(
+                api_key=settings.active_api_key,
+                api_secret=settings.active_api_secret,
+            )
+        account = await binance_client.futures_account()
+        binance_positions = account.get("positions", [])
+    except Exception as exc:
+        return {"synced": 0, "closed": 0, "created": 0, "errors": [str(exc)]}
+    finally:
+        if binance_client:
+            await binance_client.close_connection()
+
+    # Positions with non-zero amount
+    live_symbols = {}
+    for p in binance_positions:
+        amt = float(p.get("positionAmt", 0))
+        if abs(amt) >= 0.0001:
+            live_symbols[p["symbol"]] = {
+                "quantity": abs(amt),
+                "side": SignalSide.BUY if amt > 0 else SignalSide.SELL,
+                "entry_price": float(p.get("entryPrice", 0)),
+                "mark_price": float(p.get("markPrice", 0)),
+                "unrealized_pnl": float(p.get("unRealizedProfit", 0)),
+            }
+
+    closed = 0
+    created = 0
+
+    # ── Close DB trades no longer on Binance ───────────────────
+    for trade in db_trades:
+        if trade.symbol not in live_symbols:
+            exit_price = trade.entry_price
+            trade.status = TradeStatus.CLOSED
+            trade.exit_price = exit_price
+            trade.exit_time = datetime.utcnow()
+            trade.realized_pnl = 0.0
+            trade.remaining_quantity = 0.0
+            trade.close_reason = "manual_sync"
+            if trade.trade_state == TradeState.ENTRY:
+                trade.trade_state = TradeState.SL_HIT
+            closed += 1
+            logger.info("Manual sync: closed %s (%s)", trade.symbol, trade.id)
+
+    # ── Create DB records for orphaned Binance positions ──────
+    for symbol, pos in live_symbols.items():
+        if symbol not in db_symbols:
+            import uuid as _uuid
+            now = datetime.utcnow()
+            trade = Trade(
+                id=_uuid.uuid4(),
+                bot_id=bot_id,
+                signal_id=None,
+                symbol=symbol,
+                side=pos["side"],
+                strategy_name="manual_sync",
+                leverage=1,
+                entry_price=pos["entry_price"],
+                quantity=pos["quantity"],
+                remaining_quantity=pos["quantity"],
+                status=TradeStatus.OPEN,
+                trade_state=TradeState.ENTRY,
+                entry_time=now,
+                close_reason=None,
+            )
+            db.add(trade)
+
+            from app.models import Position
+            position = Position(
+                id=_uuid.uuid4(),
+                trade_id=trade.id,
+                symbol=symbol,
+                side=pos["side"],
+                quantity=pos["quantity"],
+                entry_price=pos["entry_price"],
+                mark_price=pos["mark_price"],
+                unrealized_pnl=pos["unrealized_pnl"],
+                timestamp=now,
+            )
+            db.add(position)
+            created += 1
+            logger.info("Manual sync: created record for %s", symbol)
+
+    await db.commit()
+    return {
+        "synced": len(db_trades),
+        "closed": closed,
+        "created": created,
+        "live_positions": len(live_symbols),
+    }
