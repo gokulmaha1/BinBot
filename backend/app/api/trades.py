@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func, and_
+from sqlalchemy.orm import selectinload
 
 from app.deps import get_session, get_current_user
 from app.models import Trade, TradeStatus, TradeState, Bot, SignalSide
@@ -36,6 +37,8 @@ class TradeResponse(BaseModel):
     tp2_price: float | None
     tp3_price: float | None
     realized_pnl: float
+    unrealized_pnl: float = 0.0
+    mark_price: float = 0.0
     fees: float
     slippage: float
     status: str
@@ -71,6 +74,7 @@ class TradeStatsResponse(BaseModel):
 # ── Helpers ──────────────────────────────────────────────────────
 
 def _trade_to_response(trade: Trade) -> TradeResponse:
+    pos = trade.position if hasattr(trade, 'position') and trade.position else None
     return TradeResponse(
         id=str(trade.id),
         symbol=trade.symbol,
@@ -86,6 +90,8 @@ def _trade_to_response(trade: Trade) -> TradeResponse:
         tp2_price=trade.tp2_price,
         tp3_price=trade.tp3_price,
         realized_pnl=trade.realized_pnl,
+        unrealized_pnl=pos.unrealized_pnl if pos else 0.0,
+        mark_price=pos.mark_price if pos else 0.0,
         fees=trade.fees,
         slippage=trade.slippage,
         status=trade.status.value,
@@ -165,6 +171,7 @@ async def get_active_trades(
 
     result = await db.execute(
         select(Trade)
+        .options(selectinload(Trade.position))
         .where(
             and_(
                 Trade.bot_id == bot_id,

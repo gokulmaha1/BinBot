@@ -237,7 +237,7 @@ class RiskManager:
                          equity, entry_price, sl_distance)
             return PositionSize(quantity=0.0, leverage=1, risk_amount=0.0, risk_pct=0.0)
 
-        # Risk amount: 1% of equity (HARDCODED)
+        # Risk amount: % of equity
         risk_amount = equity * settings.MAX_RISK_PER_TRADE
 
         # Raw quantity from risk
@@ -246,24 +246,24 @@ class RiskManager:
         # Notional value check
         notional_value = quantity * entry_price
 
-        # Calculate required leverage
+        # Use target leverage (MAX_LEVERAGE) to calculate required margin
+        target_leverage = settings.MAX_LEVERAGE
         max_capital = equity * settings.CAPITAL_PER_TRADE_PCT
-        required_leverage = max(1, int(np.ceil(notional_value / max_capital)))
+        required_margin = notional_value / target_leverage if target_leverage > 0 else notional_value
 
-        # Cap leverage at MAX_LEVERAGE (HARDCODED)
-        leverage = min(required_leverage, settings.MAX_LEVERAGE)
-
-        # Recalculate quantity if leverage cap reduced it
-        max_notional = max_capital * leverage
-        if notional_value > max_notional:
-            quantity = max_notional / entry_price
+        # If required margin exceeds allocated capital, reduce position size
+        if required_margin > max_capital:
+            scale = max_capital / required_margin
+            quantity *= scale
             notional_value = quantity * entry_price
-            # Recalculate actual risk pct
+            required_margin = notional_value / target_leverage
             actual_risk = (quantity * sl_distance) / equity
             logger.warning(
-                "Position size reduced due to leverage cap. Risk: %.2f%% (target 1%%)",
-                actual_risk * 100,
+                "Position size reduced: margin $%.2f > cap $%.2f. Risk: %.2f%%",
+                required_margin, max_capital, actual_risk * 100,
             )
+
+        leverage = target_leverage
 
         # Binance minimum notional check ($5 USDT for most futures pairs)
         MIN_NOTIONAL = 5.0
