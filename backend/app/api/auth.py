@@ -9,7 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from passlib.context import CryptContext
+import bcrypt
 from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -20,7 +20,16 @@ from app.models import User, UserRole
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = None # deprecated passlib context
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+def verify_password(password: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
 
 
 # ── Request/Response Models ──────────────────────────────────────
@@ -64,7 +73,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_session)):
     result = await db.execute(select(User).where(User.username == req.username))
     user = result.scalar_one_or_none()
 
-    if user and pwd_context.verify(req.password, user.password_hash):
+    if user and verify_password(req.password, user.password_hash):
         access = create_access_token(str(user.id), user.role.value)
         refresh = create_refresh_token(str(user.id), user.role.value)
         logger.info(f"User '{req.username}' logged in successfully")
@@ -80,7 +89,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_session)):
         if not user:
             user = User(
                 username=req.username,
-                password_hash=pwd_context.hash(req.password),
+                password_hash=hash_password(req.password),
                 role=UserRole.ADMIN,
             )
             db.add(user)
