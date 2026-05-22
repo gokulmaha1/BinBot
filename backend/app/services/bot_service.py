@@ -343,7 +343,7 @@ class BotService:
                             await self._log_to_db(
                                 LogLevel.INFO, LogSource.STRATEGY,
                                 f"📡 {symbol}: {len(signals)} signal(s) generated — "
-                                + ", ".join([f"{s.strategy_name} {s.side.value}" for s in signals])
+                                + ", ".join([f"{s.strategy_name} {s.side}" for s in signals])
                             )
 
                             # Step 5: Score signals
