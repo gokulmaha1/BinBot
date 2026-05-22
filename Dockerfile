@@ -38,6 +38,9 @@ COPY --from=builder /install /usr/local
 # Copy application
 COPY . .
 
+# Set Python path to backend directory for proper 'app' module imports
+ENV PYTHONPATH=/app/backend
+
 # Create data directories
 RUN mkdir -p /app/data /app/ml_models
 
