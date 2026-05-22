@@ -149,7 +149,8 @@ class TradeExecutor:
         5. Record trade in DB
         """
         symbol: str = signal.symbol if hasattr(signal, "symbol") else signal["symbol"]
-        side: str = signal.side if hasattr(signal, "side") else signal["side"]
+        raw_side = signal.side if hasattr(signal, "side") else signal["side"]
+        side: str = raw_side.value if hasattr(raw_side, 'value') else str(raw_side)
         quantity: float = position_size.quantity if hasattr(position_size, "quantity") else position_size["quantity"]
         leverage: int = position_size.leverage if hasattr(position_size, "leverage") else position_size["leverage"]
 
