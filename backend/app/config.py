@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     MAX_ACTIVE_POSITIONS: int = 3
     MAX_CORRELATED_POSITIONS: int = 1
     CORRELATION_THRESHOLD: float = 0.85
-    MAX_LEVERAGE: int = 5
+    MAX_LEVERAGE: int = 20
     MAX_TRADES_PER_DAY: int = 10
     CAPITAL_PER_TRADE_PCT: float = 0.20      # 20% of wallet per trade
 

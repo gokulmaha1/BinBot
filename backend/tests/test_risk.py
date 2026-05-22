@@ -17,6 +17,7 @@ def risk_manager(mock_db):
 
 def test_calculate_position_size(risk_manager):
     # Test typical scenario
+    settings.MAX_LEVERAGE = 5
     equity = 10000.0
     entry_price = 100.0
     sl_distance = 2.0  # 2% stop distance
@@ -43,6 +44,7 @@ def test_calculate_position_size(risk_manager):
 
 def test_calculate_position_size_leverage_cap(risk_manager):
     # Test leverage cap reduction
+    settings.MAX_LEVERAGE = 5
     equity = 10000.0
     entry_price = 100.0
     sl_distance = 0.5  # tight stop: 0.5% stop distance
