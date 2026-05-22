@@ -172,7 +172,7 @@ function initializeLayout(activePage = '') {
         sidebarContainer.innerHTML = `
             <aside class="sidebar">
                 <div class="sidebar-brand">
-                    <span>BinBot</span> PRO
+                    <span>BinBot</span> PRO <span style="font-size: 0.75rem; background: var(--primary-glow); color: var(--primary); border: 1px solid rgba(59, 130, 246, 0.4); padding: 0.1rem 0.45rem; border-radius: 6px; font-weight: 600; margin-left: 0.25rem; letter-spacing: 0.5px;">v2</span>
                 </div>
                 <ul class="sidebar-menu">
                     <li>
