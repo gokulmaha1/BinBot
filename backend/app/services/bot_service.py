@@ -483,14 +483,21 @@ class BotService:
                             # Calculate position size
                             balance = await self._executor.get_balance()
                             equity = balance * settings.CAPITAL_PER_TRADE_PCT
+                            entry_price = opp["signal"].entry_price
+                            sl_distance = opp["signal"].sl_distance
+
+                            logger.info(
+                                "PosSizing: %s bal=%.2f equity=%.2f entry=%.6f sl_dist=%.6f",
+                                opp["symbol"], balance, equity, entry_price, sl_distance,
+                            )
 
                             # Fetch quantity precision from executor asynchronously
                             qty_precision = await self._executor.get_quantity_precision(opp["symbol"])
 
                             position_size = self._risk.calculate_position_size(
                                 equity=equity,
-                                entry_price=opp["signal"].entry_price,
-                                sl_distance=opp["signal"].sl_distance,
+                                entry_price=entry_price,
+                                sl_distance=sl_distance,
                                 symbol=opp["symbol"],
                                 qty_precision=qty_precision,
                             )
@@ -499,7 +506,7 @@ class BotService:
                             if position_size.quantity <= 0:
                                 await self._log_to_db(
                                     LogLevel.WARNING, LogSource.RISK,
-                                    f"⏭️ {opp['symbol']}: Position size too small (notional < $5 or invalid inputs)"
+                                    f"⏭️ {opp['symbol']}: Size=0 (equity={equity:.1f} entry={entry_price:.6f} sl_dist={sl_distance:.6f})"
                                 )
                                 continue
 

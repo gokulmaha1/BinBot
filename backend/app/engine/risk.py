@@ -233,8 +233,13 @@ class RiskManager:
         (always positive).
         """
         if sl_distance <= 0 or entry_price <= 0 or equity <= 0:
-            logger.error("Invalid inputs for position sizing: equity=%s entry=%s sl_dist=%s",
-                         equity, entry_price, sl_distance)
+            reason = (
+                "equity<=0" if equity <= 0 else
+                "entry_price<=0" if entry_price <= 0 else
+                "sl_distance<=0"
+            )
+            logger.error("Invalid inputs for position sizing: %s equity=%.2f entry=%.6f sl_dist=%.6f",
+                         reason, equity, entry_price, sl_distance)
             return PositionSize(quantity=0.0, leverage=1, risk_amount=0.0, risk_pct=0.0)
 
         # Risk amount: % of equity
@@ -269,8 +274,8 @@ class RiskManager:
         MIN_NOTIONAL = 5.0
         if notional_value < MIN_NOTIONAL:
             logger.warning(
-                "Notional $%.2f below minimum $%.0f for %s — skipping trade",
-                notional_value, MIN_NOTIONAL, symbol,
+                "Notional $%.2f below minimum $%.0f for %s — equity=%.2f entry=%.6f sl_dist=%.6f qty=%.4f",
+                notional_value, MIN_NOTIONAL, symbol, equity, entry_price, sl_distance, quantity,
             )
             return PositionSize(quantity=0.0, leverage=1, risk_amount=0.0, risk_pct=0.0)
 
