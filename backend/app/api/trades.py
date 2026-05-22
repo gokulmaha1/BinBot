@@ -350,6 +350,16 @@ async def sync_positions(
     closed = 0
     created = 0
 
+    # Guard: if Binance returned nothing but we have DB trades, abort
+    if not live_symbols and db_trades:
+        return {
+            "synced": len(db_trades),
+            "closed": 0,
+            "created": 0,
+            "live_positions": 0,
+            "warning": "Binance returned 0 positions but open trades exist in DB — aborting to avoid false closes",
+        }
+
     # ── Close DB trades no longer on Binance ───────────────────
     for trade in db_trades:
         if trade.symbol not in live_symbols:

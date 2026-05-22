@@ -532,7 +532,17 @@ class PositionMonitor:
 
         This handles cases where TP/SL filled on Binance and the
         monitor missed the exact moment.
+
+        Guard: if Binance returned zero positions but we have open DB
+        trades, skip sync (likely an API glitch, not all positions closed).
         """
+        if not binance_positions and db_trades:
+            logger.warning(
+                "Sync guard: Binance returned 0 positions but %d open trades in DB — skipping (likely API glitch)",
+                len(db_trades),
+            )
+            return
+
         binance_symbols = {
             p["symbol"] for p in binance_positions
             if float(p.get("positionAmt", 0)) != 0
