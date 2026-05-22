@@ -1,0 +1,559 @@
+"""
+BinBot AI Auto Mode — Bot Orchestrator Service
+The main brain that connects Scanner → Features → Regime → Strategy → Score → ML → Risk → Execute.
+"""
+
+import asyncio
+import logging
+from datetime import datetime, date
+from typing import Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_
+
+from app.config import settings
+from app.models import (
+    Bot, BotStatus, Trade, TradeStatus, Signal, SignalSide,
+    SignalStatus, Strategy, StrategyType, Log, LogLevel, LogSource,
+)
+from app.db.session import async_session_factory
+
+logger = logging.getLogger(__name__)
+
+
+class BotService:
+    """
+    AI Auto Mode Orchestrator.
+    
+    Pipeline:
+    1. Scanner → Find top pairs
+    2. Features → Extract indicators for each pair
+    3. Regime → Detect market conditions
+    4. Strategies → Run compatible strategies
+    5. Scoring → Score all signals
+    6. ML → Confirm top signals
+    7. Risk → Validate against risk rules
+    8. Execute → Place trades
+    9. Monitor → Watch open positions
+    """
+
+    def __init__(self):
+        self._running = False
+        self._paused = False
+        self._task: Optional[asyncio.Task] = None
+        self._bot_id: Optional[str] = None
+
+        # Engine modules (lazy-loaded to avoid circular imports)
+        self._scanner = None
+        self._features = None
+        self._regime = None
+        self._strategies = None
+        self._scorer = None
+        self._ml = None
+        self._risk = None
+        self._executor = None
+        self._monitor = None
+        self._notifier = None
+
+    async def _init_engines(self):
+        """Initialize all engine modules."""
+        from app.engine.scanner import PairScanner
+        from app.engine.features import FeatureExtractor
+        from app.engine.regime import RegimeDetector
+        from app.engine.strategies import StrategyEngine
+        from app.engine.scoring import SignalScorer
+        from app.engine.ml_engine import MLConfirmationEngine
+        from app.engine.risk import RiskManager
+        from app.engine.executor import TradeExecutor
+        from app.engine.monitor import PositionMonitor
+        from app.services.notification import NotificationService
+        from app.deps import get_redis
+
+        redis = await get_redis()
+
+        self._scanner = PairScanner(redis=redis)
+        self._features = FeatureExtractor(redis=redis)
+        self._regime = RegimeDetector()
+        self._strategies = StrategyEngine()
+        self._scorer = SignalScorer()
+        self._ml = MLConfirmationEngine()
+        self._risk = RiskManager(redis=redis)
+        self._executor = TradeExecutor()
+        self._monitor = PositionMonitor()
+        self._notifier = NotificationService()
+
+        logger.info("All engine modules initialized")
+
+    async def start(self, bot_id: str):
+        """Start the AI Auto Mode loop."""
+        if self._running:
+            logger.warning("Bot is already running")
+            return
+
+        self._bot_id = bot_id
+        self._running = True
+        self._paused = False
+
+        await self._init_engines()
+
+        self._task = asyncio.create_task(self._main_loop())
+        logger.info(f"AI Auto Mode started for bot {bot_id}")
+
+        if self._notifier:
+            await self._notifier.notify_bot_status("running", "AI Auto Mode activated")
+
+    async def stop(self):
+        """Stop the bot loop."""
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+
+        logger.info("AI Auto Mode stopped")
+        if self._notifier:
+            await self._notifier.notify_bot_status("stopped", "Bot stopped by user")
+
+    async def pause(self):
+        """Pause new trade scanning (keep monitoring positions)."""
+        self._paused = True
+        logger.info("AI Auto Mode paused — monitoring only")
+
+    async def _log_to_db(self, level: LogLevel, source: LogSource, message: str):
+        """Write a log entry to the database."""
+        try:
+            async with async_session_factory() as session:
+                log = Log(
+                    bot_id=self._bot_id,
+                    level=level,
+                    source=source,
+                    message=message,
+                )
+                session.add(log)
+                await session.commit()
+        except Exception as e:
+            logger.error(f"Failed to write log to DB: {e}")
+
+        # Also broadcast to dashboard
+        from app.api.websocket import broadcast_log
+        await broadcast_log(level.value, source.value, message)
+
+    async def _reset_daily_if_needed(self, session: AsyncSession, bot: Bot):
+        """Reset daily counters at midnight."""
+        today = date.today()
+        if bot.last_reset_date != today:
+            bot.daily_pnl = 0.0
+            bot.trades_today = 0
+            bot.consecutive_losses = 0
+            bot.cooldown_until = None
+            bot.last_reset_date = today
+
+            # Snapshot yesterday's equity
+            balance = await self._executor.get_balance() if self._executor else 0
+            bot.daily_starting_equity = balance
+            if balance > bot.peak_equity:
+                bot.peak_equity = balance
+
+            await session.commit()
+            logger.info(f"Daily stats reset. Starting equity: ${balance:.2f}")
+
+    async def _main_loop(self):
+        """
+        The core AI Auto Mode loop.
+        
+        Runs every scanner interval, executing the full pipeline:
+        Scan → Extract → Regime → Strategy → Score → ML → Risk → Execute
+        """
+        logger.info("Entering main trading loop...")
+
+        while self._running:
+            try:
+                async with async_session_factory() as session:
+                    # Get bot record
+                    result = await session.execute(
+                        select(Bot).where(Bot.id == self._bot_id)
+                    )
+                    bot = result.scalar_one_or_none()
+                    if not bot:
+                        logger.error(f"Bot {self._bot_id} not found in DB")
+                        await asyncio.sleep(10)
+                        continue
+
+                    # Reset daily counters if new day
+                    await self._reset_daily_if_needed(session, bot)
+
+                    # ── MONITOR: Always check open positions ─────
+                    if self._monitor and self._executor:
+                        try:
+                            await self._monitor.check_positions(
+                                bot_id=self._bot_id,
+                                session=session,
+                                executor=self._executor,
+                                risk_manager=self._risk,
+                                notifier=self._notifier,
+                            )
+                        except Exception as e:
+                            logger.error(f"Position monitor error: {e}")
+
+                    # ── PAUSE CHECK: Skip scanning if paused ─────
+                    if self._paused:
+                        await asyncio.sleep(settings.SCANNER_INTERVAL_SECONDS)
+                        continue
+
+                    # ── PRE-FLIGHT: Check if we can trade ────────
+                    if not await self._can_trade(session, bot):
+                        await asyncio.sleep(settings.SCANNER_INTERVAL_SECONDS)
+                        continue
+
+                    # ── STEP 1: SCAN — Find top pairs ────────────
+                    await self._log_to_db(
+                        LogLevel.INFO, LogSource.SCANNER, "Scanning market for opportunities..."
+                    )
+                    ranked_pairs = await self._scanner.scan()
+
+                    if not ranked_pairs:
+                        await asyncio.sleep(settings.SCANNER_INTERVAL_SECONDS)
+                        continue
+
+                    from app.api.websocket import broadcast_scanner
+                    await broadcast_scanner(ranked_pairs)
+
+                    # ── STEP 2-6: ANALYZE each pair ──────────────
+                    all_opportunities = []
+
+                    for pair_info in ranked_pairs:
+                        symbol = pair_info["symbol"]
+
+                        try:
+                            # Step 2: Extract features
+                            features = await self._features.extract(symbol)
+                            if features is None:
+                                continue
+
+                            # Step 3: Detect regime
+                            regime = self._regime.detect(features)
+
+                            # Step 4: Run strategies
+                            signals = self._strategies.evaluate(features, regime)
+                            if not signals:
+                                continue
+
+                            # Step 5: Score signals
+                            for signal in signals:
+                                scored = self._scorer.score(signal, features, regime)
+
+                                if scored.total_score < settings.SIGNAL_SCORE_THRESHOLD:
+                                    # Record rejected signal
+                                    await self._record_signal(
+                                        session, bot.id, symbol, signal, scored,
+                                        ml_confidence=0,
+                                        status=SignalStatus.REJECTED,
+                                        reason=f"Score {scored.total_score} < {settings.SIGNAL_SCORE_THRESHOLD}",
+                                        regime=regime.regime,
+                                    )
+                                    continue
+
+                                # Step 6: ML confirmation
+                                ml_result = self._ml.predict(scored.to_features_dict())
+
+                                if ml_result.probability < settings.ML_CONFIDENCE_THRESHOLD:
+                                    await self._record_signal(
+                                        session, bot.id, symbol, signal, scored,
+                                        ml_confidence=ml_result.probability,
+                                        status=SignalStatus.REJECTED,
+                                        reason=f"ML confidence {ml_result.probability:.1%} < {settings.ML_CONFIDENCE_THRESHOLD:.0%}",
+                                        regime=regime.regime,
+                                    )
+                                    continue
+
+                                # Signal passed all checks!
+                                all_opportunities.append({
+                                    "symbol": symbol,
+                                    "signal": signal,
+                                    "scored": scored,
+                                    "ml_result": ml_result,
+                                    "features": features,
+                                    "regime": regime,
+                                })
+
+                        except Exception as e:
+                            logger.error(f"Error analyzing {symbol}: {e}")
+                            continue
+
+                    # ── STEP 7: RANK & SELECT best opportunities ─
+                    if not all_opportunities:
+                        await asyncio.sleep(settings.SCANNER_INTERVAL_SECONDS)
+                        continue
+
+                    # Sort by composite score (signal score * ML confidence)
+                    all_opportunities.sort(
+                        key=lambda x: x["scored"].total_score * x["ml_result"].probability,
+                        reverse=True,
+                    )
+
+                    await self._log_to_db(
+                        LogLevel.INFO, LogSource.STRATEGY,
+                        f"Found {len(all_opportunities)} opportunities. "
+                        f"Top: {all_opportunities[0]['symbol']} "
+                        f"(score={all_opportunities[0]['scored'].total_score}, "
+                        f"ML={all_opportunities[0]['ml_result'].probability:.1%})"
+                    )
+
+                    # ── STEP 8: RISK CHECK & EXECUTE ─────────────
+                    for opp in all_opportunities:
+                        try:
+                            # Get current active position count
+                            active_count = await self._get_active_position_count(session, bot.id)
+                            if active_count >= settings.MAX_ACTIVE_POSITIONS:
+                                logger.info(f"Max positions ({settings.MAX_ACTIVE_POSITIONS}) reached. Skipping.")
+                                break
+
+                            # Risk check
+                            risk_check = await self._risk.check_trade_allowed(
+                                bot=bot,
+                                symbol=opp["symbol"],
+                                side=opp["signal"].side,
+                                session=session,
+                            )
+
+                            if not risk_check.allowed:
+                                await self._record_signal(
+                                    session, bot.id, opp["symbol"], opp["signal"],
+                                    opp["scored"], opp["ml_result"].probability,
+                                    SignalStatus.REJECTED, risk_check.reason,
+                                    opp["regime"].regime,
+                                )
+                                await self._log_to_db(
+                                    LogLevel.WARNING, LogSource.RISK,
+                                    f"Trade blocked for {opp['symbol']}: {risk_check.reason}"
+                                )
+                                continue
+
+                            # Calculate position size
+                            balance = await self._executor.get_balance()
+                            equity = balance * settings.CAPITAL_PER_TRADE_PCT
+
+                            position_size = await self._risk.calculate_position_size(
+                                equity=equity,
+                                entry_price=opp["signal"].entry_price,
+                                sl_distance=opp["signal"].sl_distance,
+                                symbol=opp["symbol"],
+                                executor=self._executor,
+                            )
+
+                            # Calculate TP levels
+                            tp_levels = self._risk.calculate_tp_levels(
+                                entry_price=opp["signal"].entry_price,
+                                sl_distance=opp["signal"].sl_distance,
+                                side=opp["signal"].side,
+                            )
+
+                            # Paper mode: simulate without placing orders
+                            if settings.is_paper:
+                                await self._log_to_db(
+                                    LogLevel.TRADE, LogSource.EXECUTOR,
+                                    f"[PAPER] Would execute {opp['signal'].side} "
+                                    f"{opp['symbol']} | Qty: {position_size.quantity} | "
+                                    f"Leverage: {position_size.leverage}x | "
+                                    f"Score: {opp['scored'].total_score} | "
+                                    f"ML: {opp['ml_result'].probability:.1%}"
+                                )
+                                # Record signal as accepted
+                                await self._record_signal(
+                                    session, bot.id, opp["symbol"], opp["signal"],
+                                    opp["scored"], opp["ml_result"].probability,
+                                    SignalStatus.ACCEPTED, None, opp["regime"].regime,
+                                )
+                                continue
+
+                            # EXECUTE THE TRADE
+                            trade_result = await self._executor.execute_trade(
+                                symbol=opp["symbol"],
+                                side=opp["signal"].side,
+                                quantity=position_size.quantity,
+                                leverage=position_size.leverage,
+                                sl_price=opp["signal"].entry_price - opp["signal"].sl_distance
+                                if opp["signal"].side == "BUY"
+                                else opp["signal"].entry_price + opp["signal"].sl_distance,
+                                tp_levels=tp_levels,
+                            )
+
+                            if trade_result and trade_result.success:
+                                # Record signal
+                                signal_record = await self._record_signal(
+                                    session, bot.id, opp["symbol"], opp["signal"],
+                                    opp["scored"], opp["ml_result"].probability,
+                                    SignalStatus.ACCEPTED, None, opp["regime"].regime,
+                                )
+
+                                # Record trade
+                                trade = Trade(
+                                    bot_id=bot.id,
+                                    signal_id=signal_record.id if signal_record else None,
+                                    symbol=opp["symbol"],
+                                    side=SignalSide(opp["signal"].side),
+                                    strategy_name=opp["signal"].strategy_name,
+                                    leverage=position_size.leverage,
+                                    entry_price=trade_result.entry_price,
+                                    quantity=position_size.quantity,
+                                    remaining_quantity=position_size.quantity,
+                                    sl_price=trade_result.sl_price,
+                                    tp1_price=tp_levels.tp1_price,
+                                    tp2_price=tp_levels.tp2_price,
+                                    tp3_price=tp_levels.tp3_price,
+                                    status=TradeStatus.OPEN,
+                                    binance_order_id=trade_result.order_id,
+                                    entry_time=datetime.utcnow(),
+                                )
+                                session.add(trade)
+
+                                bot.trades_today += 1
+                                await session.commit()
+
+                                await self._log_to_db(
+                                    LogLevel.TRADE, LogSource.EXECUTOR,
+                                    f"🚀 TRADE OPENED | {opp['signal'].side} {opp['symbol']} | "
+                                    f"Entry: {trade_result.entry_price} | "
+                                    f"SL: {trade_result.sl_price} | "
+                                    f"TP1: {tp_levels.tp1_price} | "
+                                    f"Leverage: {position_size.leverage}x | "
+                                    f"Score: {opp['scored'].total_score} | "
+                                    f"ML: {opp['ml_result'].probability:.1%}"
+                                )
+
+                                # Notify via Telegram
+                                if self._notifier:
+                                    await self._notifier.notify_trade_entry(
+                                        symbol=opp["symbol"],
+                                        side=opp["signal"].side,
+                                        strategy=opp["signal"].strategy_name,
+                                        entry_price=trade_result.entry_price,
+                                        quantity=position_size.quantity,
+                                        leverage=position_size.leverage,
+                                        sl_price=trade_result.sl_price,
+                                        tp1_price=tp_levels.tp1_price,
+                                        score=opp["scored"].total_score,
+                                        ml_confidence=opp["ml_result"].probability,
+                                    )
+
+                                # Broadcast to dashboard
+                                from app.api.websocket import broadcast_trade
+                                await broadcast_trade({
+                                    "event": "opened",
+                                    "symbol": opp["symbol"],
+                                    "side": opp["signal"].side,
+                                    "entry_price": trade_result.entry_price,
+                                    "strategy": opp["signal"].strategy_name,
+                                })
+
+                        except Exception as e:
+                            logger.error(f"Error executing trade for {opp['symbol']}: {e}")
+                            continue
+
+                # Wait for next scan cycle
+                await asyncio.sleep(settings.SCANNER_INTERVAL_SECONDS)
+
+            except asyncio.CancelledError:
+                logger.info("Main loop cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Main loop error: {e}")
+                await asyncio.sleep(30)
+
+        logger.info("Main trading loop exited")
+
+    async def _can_trade(self, session: AsyncSession, bot: Bot) -> bool:
+        """Pre-flight checks before scanning for trades."""
+        # Check if bot is in error state
+        if bot.status == BotStatus.ERROR:
+            return False
+
+        # Check cooldown from consecutive losses
+        if bot.cooldown_until and datetime.utcnow() < bot.cooldown_until:
+            remaining = (bot.cooldown_until - datetime.utcnow()).total_seconds()
+            logger.info(f"Cooldown active. {remaining:.0f}s remaining.")
+            return False
+
+        # Check daily loss limit
+        if bot.daily_starting_equity > 0:
+            daily_loss_pct = abs(bot.daily_pnl) / bot.daily_starting_equity
+            if bot.daily_pnl < 0 and daily_loss_pct >= settings.MAX_DAILY_LOSS:
+                await self._log_to_db(
+                    LogLevel.WARNING, LogSource.RISK,
+                    f"Daily loss limit hit: {daily_loss_pct:.1%} >= {settings.MAX_DAILY_LOSS:.0%}"
+                )
+                return False
+
+        # Check max drawdown
+        if bot.peak_equity > 0:
+            drawdown = (bot.peak_equity - (bot.daily_starting_equity + bot.daily_pnl)) / bot.peak_equity
+            if drawdown >= settings.MAX_DRAWDOWN:
+                await self._log_to_db(
+                    LogLevel.ERROR, LogSource.RISK,
+                    f"⚠️ MAX DRAWDOWN HIT: {drawdown:.1%} >= {settings.MAX_DRAWDOWN:.0%}. "
+                    f"Bot paused. Manual intervention required."
+                )
+                bot.status = BotStatus.PAUSED
+                await session.commit()
+                if self._notifier:
+                    await self._notifier.notify_risk_alert(
+                        "MAX_DRAWDOWN", f"Drawdown {drawdown:.1%} hit limit. Bot paused."
+                    )
+                return False
+
+        # Check daily trade limit
+        if bot.trades_today >= settings.MAX_TRADES_PER_DAY:
+            logger.info(f"Daily trade limit reached: {bot.trades_today}/{settings.MAX_TRADES_PER_DAY}")
+            return False
+
+        return True
+
+    async def _get_active_position_count(self, session: AsyncSession, bot_id) -> int:
+        """Count currently open positions."""
+        from sqlalchemy import func
+        result = await session.execute(
+            select(func.count(Trade.id))
+            .where(and_(
+                Trade.bot_id == bot_id,
+                Trade.status.in_([TradeStatus.OPEN, TradeStatus.PARTIAL_TP]),
+            ))
+        )
+        return result.scalar() or 0
+
+    async def _record_signal(
+        self, session, bot_id, symbol, signal, scored,
+        ml_confidence, status, reason, regime,
+    ):
+        """Record a signal in the database."""
+        record = Signal(
+            bot_id=bot_id,
+            symbol=symbol,
+            side=SignalSide(signal.side),
+            strategy_name=signal.strategy_name,
+            score=scored.total_score,
+            ml_confidence=ml_confidence,
+            score_breakdown=scored.breakdown,
+            features_snapshot=signal.features_used if hasattr(signal, 'features_used') else {},
+            regime=regime,
+            status=status,
+            reject_reason=reason,
+        )
+        session.add(record)
+        await session.flush()
+
+        # Broadcast to dashboard
+        from app.api.websocket import broadcast_signal
+        await broadcast_signal({
+            "symbol": symbol,
+            "side": signal.side,
+            "strategy": signal.strategy_name,
+            "score": scored.total_score,
+            "ml_confidence": ml_confidence,
+            "status": status.value,
+            "reason": reason,
+        })
+
+        return record

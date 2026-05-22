@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BinBot PRO | AI Auto Mode</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <style>
+        .ai-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1.8fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .engine-logs {
+            background: #0f1726;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            overflow-y: auto;
+            max-height: 480px;
+        }
+
+        .stat-card-small {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .stat-card-small .val {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-top: 0.25rem;
+        }
+
+        .stat-card-small .lbl {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .card-divider {
+            height: 1px;
+            background: var(--border-color);
+            margin: 1.25rem 0;
+        }
+
+        .limit-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .limit-row span:first-child {
+            color: var(--text-secondary);
+        }
+
+        .limit-row span:last-child {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        @media (max-width: 1024px) {
+            .ai-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Navigation Container -->
+    <div id="sidebar-container"></div>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Top Status/Metric Header Container -->
+        <div id="header-container"></div>
+
+        <div class="ai-grid">
+            <!-- Left: Engine Controls & hard rules -->
+            <div class="control-panel">
+                <!-- Control Card -->
+                <div class="card">
+                    <div class="card-title">AI Engine Controller</div>
+                    
+                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                        Toggle active scanning. The bot will automatically analyze charts, filter by market regimes, verify signals with XGBoost, enforce pre-trade risk checks, and execute trades on Binance Futures.
+                    </p>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <button id="btn-start-bot" class="btn btn-success" style="width: 100%;">
+                            ⚡ Start AI Auto Mode
+                        </button>
+                        <button id="btn-pause-bot" class="btn btn-secondary" style="width: 100%;">
+                            ⏸️ Pause Engine (Monitor Only)
+                        </button>
+                        <button id="btn-stop-bot" class="btn btn-danger" style="width: 100%;">
+                            🛑 Stop AI Engine
+                        </button>
+                    </div>
+
+                    <div class="card-divider"></div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <div class="stat-card-small">
+                            <div class="lbl">Trades Today</div>
+                            <div id="ai-trades-today" class="val">0</div>
+                        </div>
+                        <div class="stat-card-small">
+                            <div class="lbl">Consec. Losses</div>
+                            <div id="ai-consec-losses" class="val">0</div>
+                        </div>
+                    </div>
+
+                    <button id="btn-reset-daily" class="btn btn-secondary" style="width: 100%; margin-top: 1rem; font-size: 0.8rem; padding: 0.5rem 1rem;">
+                        🔄 Reset Daily Counters
+                    </button>
+                </div>
+
+                <!-- Hard Risk Limits Card -->
+                <div class="card">
+                    <div class="card-title">Hardwired Risk Limits</div>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem;">
+                        These protection settings are hard-coded in the engine core and cannot be bypassed.
+                    </p>
+
+                    <div class="limit-row">
+                        <span>Max Active Positions</span>
+                        <span>3 Positions</span>
+                    </div>
+                    <div class="limit-row">
+                        <span>Risk Capital Per Trade</span>
+                        <span>1% Wallet Balance</span>
+                    </div>
+                    <div class="limit-row">
+                        <span>Max Leverage Limit</span>
+                        <span>5x Leverage</span>
+                    </div>
+                    <div class="limit-row">
+                        <span>Daily Loss Iron Shield</span>
+                        <span>3% of peak equity</span>
+                    </div>
+                    <div class="limit-row">
+                        <span>Maximum Drawdown Limit</span>
+                        <span>8% Peak to Trough</span>
+                    </div>
+                    <div class="limit-row">
+                        <span>Consecutive Loss Cooldown</span>
+                        <span>30 mins (on 3 losses)</span>
+                    </div>
+                    <div class="limit-row">
+                        <span>Min Strategy Score</span>
+                        <span>80 / 100</span>
+                    </div>
+                    <div class="limit-row">
+                        <span>Min ML Confidence</span>
+                        <span>75.0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Real-time Scanning log & AI activity -->
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <div class="card" style="display: flex; flex-direction: column; flex-grow: 1; margin-bottom: 0;">
+                    <div class="card-title">
+                        Engine Activity Feed
+                        <span class="badge badge-info" id="execution-mode">PAPER MODE</span>
+                    </div>
+                    <div id="logsContainer" class="logs-box" style="flex-grow: 1; height: 500px;">
+                        <!-- Scans, signals, and executions -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Load Socket.IO, app.js, and page-specific JS -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/ai-mode.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeLayout('ai-mode');
+        });
+    </script>
+</body>
+</html>

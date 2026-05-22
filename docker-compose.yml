@@ -1,21 +1,90 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  binbot-pro:
+  # ── FastAPI Application ────────────────────────────────────────
+  app:
     build: .
-    container_name: binbot_pro_engine
+    container_name: binbot-ai
     ports:
       - "8012:8000"
     env_file:
       - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./data:/app/data
-    restart: always
+      - ./ml_models:/app/ml_models
+    restart: unless-stopped
     logging:
       driver: "json-file"
       options:
-        max-size: "10mb"
+        max-size: "10m"
         max-file: "3"
 
+  # ── PostgreSQL Database ────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: binbot-db
+    environment:
+      POSTGRES_DB: binbot
+      POSTGRES_USER: binbot
+      POSTGRES_PASSWORD: binbot
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U binbot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis Cache ────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: binbot-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # ── Celery Worker ──────────────────────────────────────────────
+  celery:
+    build: .
+    container_name: binbot-celery
+    command: celery -A celery_worker worker --loglevel=info --concurrency=2
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - ./data:/app/data
+      - ./ml_models:/app/ml_models
+    restart: unless-stopped
+
+  # ── Celery Beat Scheduler ──────────────────────────────────────
+  celery-beat:
+    build: .
+    container_name: binbot-beat
+    command: celery -A celery_worker beat --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: unless-stopped
+
 volumes:
-  db_data:
+  pgdata:
+  redisdata:

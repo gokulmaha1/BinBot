@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BinBot PRO | Market Scanner</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <style>
+        .scanner-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .score-badge {
+            background-color: var(--primary-glow);
+            color: var(--primary);
+            font-weight: 700;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            display: inline-block;
+        }
+
+        .score-badge.high {
+            background-color: var(--success-glow);
+            color: var(--success);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+
+        .regime-badge {
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+        }
+
+        .regime-trending-bullish { background: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
+        .regime-trending-bearish { background: rgba(244, 63, 94, 0.15); color: var(--danger); border: 1px solid rgba(244, 63, 94, 0.3); }
+        .regime-ranging { background: rgba(148, 163, 184, 0.15); color: var(--text-secondary); border: 1px solid rgba(148, 163, 184, 0.3); }
+        .regime-breakout { background: rgba(59, 130, 246, 0.15); color: var(--primary); border: 1px solid rgba(59, 130, 246, 0.3); }
+        .regime-mean-reversion { background: rgba(245, 158, 11, 0.15); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Navigation Container -->
+    <div id="sidebar-container"></div>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Top Status/Metric Header Container -->
+        <div id="header-container"></div>
+
+        <div class="scanner-layout">
+            <div class="card">
+                <div class="card-title">
+                    Real-time Market Opportunity Scanner
+                    <span id="scan-timer" class="badge badge-info" style="font-size: 0.8rem;">Live Scanning (15s Loop)</span>
+                </div>
+                
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                    The pair scanner sweeps all active Binance USDT-M Futures markets every 15 seconds. It filters out assets below $50M 24h volume or listing age less than 30 days. Valid pairs are scored using volatility (ATR), momentum (ADX), and open interest spikes, and regime is automatically classified.
+                </p>
+
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Last Price</th>
+                                <th>24h Volume</th>
+                                <th>Open Interest</th>
+                                <th>Volatility (ATR %)</th>
+                                <th>Trend Strength (ADX)</th>
+                                <th>Market Regime</th>
+                                <th>Scanner Score</th>
+                                <th>Last Checked</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scanner-table-body">
+                            <tr>
+                                <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 3rem;">
+                                    Loading ranked opportunities...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Load Socket.IO, app.js, and page-specific JS -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/scanner.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeLayout('scanner');
+        });
+    </script>
+</body>
+</html>

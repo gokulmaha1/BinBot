@@ -1,878 +1,201 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BinBot PRO | Hardened Dashboard</title>
+    <title>BinBot PRO | Control Center</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
     <style>
-        :root {
-            --bg: #0f172a;
-            --card: #1e293b;
-            --primary: #3b82f6;
-            --success: #22c55e;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --text: #f8fafc;
-            --text-dim: #94a3b8;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            background-color: var(--bg);
-            color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            line-height: 1.5;
-        }
-
-        .navbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem 2rem;
-            background: var(--bg);
-            border-bottom: 1px solid #334155;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .logo {
-            font-size: 1.5rem;
-            font-weight: bold;
-        }
-
-        .logo span {
-            color: var(--primary);
-        }
-
-        .btn {
-            padding: 0.6rem 1.2rem;
-            border-radius: 8px;
-            border: none;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-start {
-            background: var(--success);
-            color: white;
-        }
-
-        .btn-stop {
-            background: var(--danger);
-            color: white;
-        }
-
-        .btn-reset {
-            background: transparent;
-            border: 1px solid #334155;
-            color: var(--text-dim);
-            margin-top: 10px;
-            width: 100%;
-        }
-
-        .container {
-            max-width: 98%;
-            margin: 1rem auto;
-            padding: 0 1rem;
-        }
-
-        .card {
-            background: var(--card);
-            border-radius: 16px;
-            padding: 1.2rem;
-            border: 1px solid #334155;
-            margin-bottom: 1rem;
-        }
-
-        .card-title {
-            font-size: 1.1rem;
-            font-weight: bold;
-            margin-bottom: 0.8rem;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        /* Tooltip CSS */
-        .tooltip {
-            position: relative;
-            display: inline-block;
-            cursor: help;
-            margin-left: 5px;
-            color: var(--text-dim);
-            font-size: 0.9em;
-            background: #334155;
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
-            text-align: center;
-            line-height: 16px;
-            font-weight: bold;
-        }
-
-        .tooltip .tooltiptext {
-            visibility: hidden;
-            width: 250px;
-            background-color: var(--bg);
-            color: var(--text);
-            text-align: left;
-            border-radius: 6px;
-            padding: 10px;
-            position: absolute;
-            z-index: 1000;
-            bottom: 150%;
-            left: 50%;
-            margin-left: -125px;
-            opacity: 0;
-            transition: opacity 0.2s;
-            font-size: 0.75rem;
-            font-weight: normal;
-            border: 1px solid #475569;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-            pointer-events: none;
-        }
-
-        .tooltip .tooltiptext::after {
-            content: "";
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            margin-left: -5px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: #475569 transparent transparent transparent;
-        }
-
-        .tooltip:hover .tooltiptext {
-            visibility: visible;
-            opacity: 1;
+        .overview-grid {
+            display: grid;
+            grid-template-columns: 1.8fr 1.2fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
         }
         
-        .tooltiptext strong {
-            color: var(--primary);
-            display: block;
-            margin-bottom: 4px;
-            font-size: 0.85rem;
+        .chart-container {
+            position: relative;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            border: 1px solid var(--border-color);
         }
-        .tooltiptext em {
-            color: var(--success);
-            font-style: normal;
-            display: block;
-            margin-top: 4px;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .stat-box {
-            background: var(--card);
-            padding: 0.8rem;
-            border-radius: 12px;
-            border: 1px solid #334155;
-            text-align: center;
-        }
-
-        .stat-label {
-            color: var(--text-dim);
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .stat-value {
-            font-size: 1.4rem;
-            font-weight: bold;
-            margin-top: 2px;
-        }
-
-        input,
-        select {
+        
+        canvas#priceChart {
             width: 100%;
-            background: #0f172a;
-            border: 1px solid #334155;
-            color: white;
-            padding: 10px;
-            border-radius: 8px;
-            font-family: inherit;
-            font-size: 0.9rem;
-            transition: all 0.2s;
-            outline: none;
-            appearance: none;
-            /* Modern look */
+            height: 250px;
         }
 
-        input:focus,
-        select:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-        }
-
-        select {
-            cursor: pointer;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 10px center;
-            background-size: 15px;
-            padding-right: 30px;
-        }
-
-        input::placeholder {
-            color: #475569;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
+        .active-assets-list {
             margin-top: 1rem;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
         }
 
-        th {
-            text-align: left;
-            color: var(--text-dim);
+        .asset-chip {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
             font-size: 0.8rem;
-            padding: 1rem;
-            border-bottom: 1px solid #334155;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
         }
 
-        td {
-            padding: 1rem;
-            border-bottom: 1px solid #1e293b;
-            font-size: 0.9rem;
+        .asset-chip.active {
+            background: var(--primary-glow);
+            border-color: var(--primary);
+            color: var(--text-primary);
         }
-
-        .pnl-pos {
-            color: var(--success);
-        }
-
-        .pnl-neg {
-            color: var(--danger);
-        }
-
-        .logs-container {
-            max-height: 300px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 0.8rem;
-        }
-
-        .log-entry {
-            padding: 0.5rem;
-            border-left: 3px solid var(--primary);
-            margin-bottom: 4px;
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .log-error {
-            border-color: var(--danger);
-        }
-
-        .log-warn {
-            border-color: var(--warning);
-        }
-
-        .log-success {
-            border-color: var(--success);
-        }
-
-        .input-group {
-            margin-bottom: 1rem;
-        }
-
-        .input-group label {
-            display: block;
-            color: var(--text-dim);
-            font-size: 0.8rem;
-            margin-bottom: 4px;
-        }
-
-        .input-group input {
-            width: 100%;
-            background: #0f172a;
-            border: 1px solid #334155;
-            color: white;
-            padding: 0.6rem;
-            border-radius: 8px;
-        }
-
-        @media (max-width: 900px) {
-            .container {
+        
+        @media (max-width: 1024px) {
+            .overview-grid {
                 grid-template-columns: 1fr;
-            }
-
-            .stats-grid {
-                grid-template-columns: 1fr 1fr;
             }
         }
     </style>
 </head>
-
 <body>
-    <nav class="navbar" style="flex-wrap: wrap; gap: 0.5rem;">
-        <div class="logo">BinBot <span>PRO</span></div>
-        <div style="display: flex; align-items: center; gap: 0.6rem; flex: 1; min-width: 300px;">
-            <span style="color: var(--text-dim); font-size: 0.75rem; white-space: nowrap;">WATCHLIST:</span>
-            <input type="text" id="cfgSymbols" placeholder="BTCUSDT,ETHUSDT,SOLUSDT" value="BTCUSDT"
-                style="flex: 1;width: 320px; padding: 5px 10px; font-size: 0.8rem; border-radius: 6px;">
-            <select id="cfgTestnet" style="padding: 5px 8px; font-size: 0.8rem; border-radius: 6px; min-width: 120px;">
-                <option value="true">⚡ TESTNET</option>
-                <option value="false">🔴 LIVE</option>
-            </select>
-        </div>
-        <div style="display: flex; align-items: center; gap: 0.8rem;">
-            <div id="botStatus" style="font-size: 0.85rem; font-weight: bold;">Bot Idle</div>
-            <button id="toggleBtn" class="btn btn-start">Start Bot</button>
-            <button onclick="logout()" class="btn"
-                style="background: transparent; color: #94a3b8; font-size: 0.8rem;">Logout</button>
-        </div>
-    </nav>
+    <!-- Sidebar Navigation Container -->
+    <div id="sidebar-container"></div>
 
-    <div class="container" style="max-width: 1400px; padding: 0 1rem;">
-        <!-- Row 1: Stats -->
-        <div class="stats-grid">
-            <div class="stat-box">
-                <div class="stat-label">Balance</div>
-                <div id="statBalance" class="stat-value">$0.00</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-label">Today's PnL</div>
-                <div id="statPnL" class="stat-value">$0.00</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-label">Win Rate</div>
-                <div id="statWinRate" class="stat-value">0%</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-label">Trades</div>
-                <div id="statTrades" class="stat-value">0</div>
-            </div>
-        </div>
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Top Status/Metric Header Container -->
+        <div id="header-container"></div>
 
-        <!-- Row 2: 3-Column Command Center -->
-        <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
-            <!-- Column 1: Live Feed & AI -->
-            <div class="card" style="margin-bottom: 0;">
-                <div class="card-title">Live Feed: <span id="activeAsset"
-                        style="font-size: 0.8rem; color: var(--text-dim); margin-right: 10px;">[---]</span> <span
-                        id="livePrice" style="color: #60a5fa;">$0.00</span></div>
-                <canvas id="priceChart"
-                    style="width: 100%; height: 260px; background: rgba(0,0,0,0.2); border-radius: 8px;"></canvas>
-
-                <div style="margin-top: 1rem;">
-                    <div class="card-title" style="font-size: 0.9rem; margin-bottom: 0.5rem;">AI Sniper Confidence</div>
-                    <div style="height: 10px; background: #0f172a; border-radius: 5px; overflow: hidden;">
-                        <div id="confBar"
-                            style="height: 100%; width: 50%; background: var(--primary); transition: width 0.5s;"></div>
-                    </div>
-                    <div id="confVal" style="text-align: right; font-size: 0.8rem; margin-top: 0.2rem;">50%</div>
+        <!-- 4-Column Metric Grid -->
+        <section class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-header">
+                    <span class="stat-title">Win Rate</span>
+                    <span class="stat-icon">📊</span>
                 </div>
+                <div id="stat-win-rate" class="stat-number">0.0%</div>
+                <div class="stat-change text-secondary">Based on closed trades</div>
             </div>
-
-            <!-- Column 2: Risk Controls -->
-            <div class="card" style="margin-bottom: 0;">
-                <div class="card-title">Risk Sniper Settings</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;">
-                    <div class="input-group">
-                        <label>Leverage
-                            <span class="tooltip">?<span class="tooltiptext"><strong>Leverage Multiplier</strong>The multiplier applied to your margin.<br><br><em>Ex: $10 margin at 20x Leverage = $200 position size. Higher leverage increases both profit and liquidation risk.</em></span></span>
-                        </label>
-                        <input type="number" id="cfgLev" value="20">
-                    </div>
-                    <div class="input-group">
-                        <label>Stop Loss %
-                            <span class="tooltip">?<span class="tooltiptext"><strong>Hard Stop Loss</strong>The maximum % loss allowed on the total position size before the bot forcibly exits the trade.<br><br><em>Ex: At 1.5%, a $100 position will close if it loses $1.50.</em></span></span>
-                        </label>
-                        <input type="number" id="cfgSL" value="1.5" step="0.1">
-                    </div>
-                    <div class="input-group">
-                        <label>Take Profit %
-                            <span class="tooltip">?<span class="tooltiptext"><strong>Target Take Profit</strong>The baseline % profit target. If Trailing SL is OFF, the trade closes here. If ON, it acts as a baseline.<br><br><em>Ex: At 0.75%, the bot secures profit once the position gains that amount.</em></span></span>
-                        </label>
-                        <input type="number" id="cfgTP" value="0.75" step="0.05">
-                    </div>
-                    <div class="input-group">
-                        <label>Daily Loss $
-                            <span class="tooltip">?<span class="tooltiptext"><strong>Global Iron Shield</strong>The maximum absolute dollar amount your bot is allowed to lose in a single day. If hit, trading halts.<br><br><em>Ex: If set to $200, the bot stops trading until reset if daily PnL drops below -$200.</em></span></span>
-                        </label>
-                        <input type="number" id="cfgDLL" value="200">
-                    </div>
-                    <div class="input-group">
-                        <label>Dynamic Mode
-                            <span class="tooltip">?<span class="tooltiptext"><strong>Volatility Adjustment</strong>Allows the bot to automatically adjust Take Profit and Stop Loss levels based on current market volatility (ADX/Momentum).<br><br><em>Ex: In a wild market, the bot will widen the SL and TP to avoid being stopped out by random wicks.</em></span></span>
-                        </label>
-                        <select id="cfgDynamic">
-                            <option value="true">ENABLE (%)</option>
-                            <option value="false">DISABLE</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>Risk Per Trade
-                            <span class="tooltip">?<span class="tooltiptext"><strong>Margin Allocation (%)</strong>The percentage of your total available wallet balance to use for a single trade's margin.<br><br><em>Ex: 50% of a $10 wallet means the bot will use $5 margin per trade.</em></span></span>
-                        </label>
-                        <input type="number" id="cfgRiskPct" value="50">
-                    </div>
-                    <div class="input-group">
-                        <label>DCA Recovery
-                            <span class="tooltip">?<span class="tooltiptext"><strong>Dollar Cost Averaging</strong>If the trade goes negative (-0.6%), the bot will inject more funds to lower the average entry price, making it easier to break even.<br><br><em>Warning: Increases risk. Requires extra margin.</em></span></span>
-                        </label>
-                        <select id="cfgDCA">
-                            <option value="false">OFF</option>
-                            <option value="true">ON</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>Trailing SL
-                            <span class="tooltip">?<span class="tooltiptext"><strong>Smart Stop Loss</strong>Automatically moves your Stop Loss to Break-Even once a trade is in profit, then trails behind the price to lock in gains.<br><br><em>Ex: Locks in break-even at +5% ROI, preventing winning trades from turning into losses.</em></span></span>
-                        </label>
-                        <select id="cfgTrailing">
-                            <option value="true">ON</option>
-                            <option value="false">OFF</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>Trailing TP
-                            <span class="tooltip">?<span class="tooltiptext"><strong>Smart Take Profit</strong>When ON, the bot uses trailing mechanics to catch higher peaks. When OFF, it sells instantly at standard Take Profit.</span></span>
-                        </label>
-                        <select id="cfgTTP">
-                            <option value="true">ON</option>
-                            <option value="false">OFF</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>TTP Activate %
-                            <span class="tooltip">?<span class="tooltiptext"><strong>Trailing TP Trigger</strong>The profit % at which the Trailing Take Profit (TTP) system turns on.<br><br><em>Ex: At 1.0%, the bot will ignore standard Take Profits and instead wait for the price to peak and reverse before selling.</em></span></span>
-                        </label>
-                        <input type="number" id="cfgTTPAct" value="1.0" step="0.1">
-                    </div>
-                    <div class="input-group">
-                        <label>TTP Callback %
-                            <span class="tooltip">?<span class="tooltiptext"><strong>Trailing TP Callback</strong>Once TTP is active, the bot sells if the price drops by this percentage from its absolute peak.<br><br><em>Ex: Peak is +5%, Callback is 0.2%. Bot sells if profit drops to +4.8%, capturing the maximum possible gain.</em></span></span>
-                        </label>
-                        <input type="number" id="cfgTTPCall" value="0.2" step="0.05">
-                    </div>
-                    <div class="input-group" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #334155;">
-                        <label>Static TP (Fixed Target)
-                            <span class="tooltip">?<span class="tooltiptext"><strong>Static Take Profit</strong>When ON, the bot sets a fixed TP price that never changes. The TP order triggers immediately when market hits the target price. Fees are automatically calculated into the target.<br><br><em>Disables trailing TP and dynamic management.</em></span></span>
-                        </label>
-                        <select id="cfgStaticTP">
-                            <option value="false">OFF</option>
-                            <option value="true">ON</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>Static TP ROI %
-                            <span class="tooltip">?<span class="tooltiptext"><strong>Static TP Target ROI</strong>The fixed ROI percentage the bot will target. Fees (~0.1%) are automatically added to ensure net profit matches this target.<br><br><em>Ex: 2.0% ROI at 20x leverage = 0.1% price move target (fees included).</em></span></span>
-                        </label>
-                        <input type="number" id="cfgStaticTPROI" value="2.0" step="0.1" min="0.1">
-                    </div>
+            
+            <div class="stat-card success">
+                <div class="stat-header">
+                    <span class="stat-title">Profit Factor</span>
+                    <span class="stat-icon">💰</span>
                 </div>
-                <button id="saveBtn" class="btn btn-save"
-                    style="width: 100%; margin-top: 1rem; background: var(--primary); color: white;">Save
-                    Configuration</button>
-                <button id="resetBtn" class="btn btn-start"
-                    style="width: 100%; margin-top: 0.5rem; background: #374151;">Reset Daily PnL Counter</button>
+                <div id="stat-profit-factor" class="stat-number">0.00</div>
+                <div class="stat-change text-secondary">Gross profit/loss ratio</div>
             </div>
+            
+            <div class="stat-card">
+                <div class="stat-header">
+                    <span class="stat-title">Total Scans</span>
+                    <span class="stat-icon">🔍</span>
+                </div>
+                <div id="stat-total-scans" class="stat-number">0</div>
+                <div class="stat-change text-secondary">AI market checks</div>
+            </div>
+            
+            <div class="stat-card danger">
+                <div class="stat-header">
+                    <span class="stat-title">Daily Drawdown</span>
+                    <span class="stat-icon">⚠️</span>
+                </div>
+                <div id="stat-daily-drawdown" class="stat-number">0.00%</div>
+                <div class="stat-change text-secondary">Max 3% limit</div>
+            </div>
+        </section>
 
-            <!-- Column 3: Live System Logs -->
-            <div class="card" style="margin-bottom: 0; display: flex; flex-direction: column;">
+        <!-- Two-Column Overview Section -->
+        <div class="overview-grid">
+            <!-- Left: Live Price & Chart -->
+            <div class="card">
                 <div class="card-title">
-                    System Status Logs
-                    <button onclick="copyLogs()" class="btn" style="padding: 2px 8px; font-size: 0.7rem; background: #334155;">Copy All</button>
+                    <div>
+                        Live Chart: <span id="activeAsset" class="badge badge-info">BTCUSDT</span>
+                    </div>
+                    <span id="livePrice" class="pnl-pos" style="font-size: 1.25rem;">$0.00</span>
                 </div>
-                <div id="logsContainer" class="logs-container"
-                    style="flex-grow: 1; overflow-y: auto; font-size: 0.75rem; max-height: 380px;">
-                    <!-- Logs here -->
+                
+                <div class="chart-container">
+                    <canvas id="priceChart"></canvas>
+                </div>
+                
+                <div class="active-assets-list" id="watchlist-container">
+                    <!-- Loaded dynamically from settings symbols -->
+                </div>
+                
+                <div style="margin-top: 1.5rem;">
+                    <div class="card-title" style="font-size: 0.9rem; margin-bottom: 0.5rem;">AI Sniper Confidence</div>
+                    <div style="height: 10px; background: rgba(0,0,0,0.3); border-radius: 5px; overflow: hidden; border: 1px solid var(--border-color);">
+                        <div id="confBar" style="height: 100%; width: 0%; background: var(--primary); transition: width 0.5s; box-shadow: 0 0 10px var(--primary-glow);"></div>
+                    </div>
+                    <div id="confVal" style="text-align: right; font-size: 0.8rem; margin-top: 0.25rem; color: var(--text-secondary);">0%</div>
+                </div>
+            </div>
+
+            <!-- Right: System Logs -->
+            <div class="card" style="display: flex; flex-direction: column;">
+                <div class="card-title">
+                    System Logs
+                    <button onclick="copyLogs()" class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border-radius: 6px;">Copy Logs</button>
+                </div>
+                <div id="logsContainer" class="logs-box" style="flex-grow: 1; height: 350px;">
+                    <!-- Real-time log entries -->
                 </div>
             </div>
         </div>
 
-        <!-- Row 3: History -->
-        <div class="card" style="margin-top: 1rem;">
-            <div class="card-title">Recent Trade Activity</div>
-            <div style="overflow-x: auto; max-height: 300px;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+        <!-- Active Positions table snippet -->
+        <div class="card">
+            <div class="card-title">
+                Active Positions
+                <a href="/dashboard/positions" class="btn btn-secondary" style="padding: 0.35rem 0.85rem; font-size: 0.8rem; border-radius: 6px; text-decoration: none;">Manage Positions</a>
+            </div>
+            <div style="overflow-x: auto;">
+                <table>
                     <thead>
-                        <tr style="text-align: left; color: #94a3b8; border-bottom: 1px solid #374151;">
-                            <th style="padding: 0.5rem;">Time</th>
-                            <th>Pair</th>
+                        <tr>
+                            <th>Symbol</th>
                             <th>Side</th>
-                            <th>Lev</th>
-                            <th>Qty</th>
-                            <th>Entry</th>
-                            <th>TP</th>
-                            <th>SL</th>
-                            <th>PnL</th>
+                            <th>Leverage</th>
+                            <th>Entry Price</th>
+                            <th>Mark Price</th>
+                            <th>Take Profit</th>
+                            <th>Stop Loss</th>
+                            <th>Unrealized PnL</th>
                             <th>Action</th>
                         </tr>
                     </thead>
-                    <tbody id="tradeBody"></tbody>
+                    <tbody id="active-positions-body">
+                        <tr>
+                            <td colspan="9" style="text-align: center; color: var(--text-muted);">No active positions.</td>
+                        </tr>
+                    </tbody>
                 </table>
             </div>
         </div>
-    </div>
+    </main>
 
+    <!-- Load Socket.IO, app.js, and page-specific JS -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/overview.js"></script>
     <script>
-        // CLIENT-SIDE GUARD: Instant Auth Validation
-        if (localStorage.getItem('binbot_logged_in') !== 'true') {
-            window.location.href = '/dashboard/login.html';
-        }
-
-        let isRunning = false;
-        let priceData = [];
-        const maxPoints = 100;
-        const canvas = document.getElementById('priceChart');
-        const ctx = canvas.getContext('2d');
-
-        function initChart() {
-            canvas.width = canvas.parentElement.clientWidth - 32;
-            canvas.height = 200;
-        }
-
-        function drawChart() {
-            if (priceData.length < 2) return;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            const min = Math.min(...priceData);
-            const max = Math.max(...priceData);
-            const range = max - min || 1;
-
-            ctx.beginPath();
-            ctx.strokeStyle = '#3b82f6';
-            ctx.lineWidth = 2;
-
-            const stepX = canvas.width / (maxPoints - 1);
-
-            priceData.forEach((p, i) => {
-                const x = i * stepX;
-                const y = canvas.height - ((p - min) / range * (canvas.height - 40) + 20);
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-
-            ctx.stroke();
-
-            // Gradient
-            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            grad.addColorStop(0, 'rgba(59, 130, 246, 0.2)');
-            grad.addColorStop(1, 'rgba(59, 130, 246, 0)');
-            ctx.lineTo((priceData.length - 1) * stepX, canvas.height);
-            ctx.lineTo(0, canvas.height);
-            ctx.fillStyle = grad;
-            ctx.fill();
-            
-            // Draw Current Price Overlay in Chart
-            const currentPrice = priceData[priceData.length - 1];
-            ctx.fillStyle = '#f8fafc'; // White text
-            ctx.font = 'bold 18px sans-serif';
-            ctx.textAlign = 'right';
-            
-            // Draw a subtle background pill for readability
-            const priceText = '$' + currentPrice.toFixed(4);
-            const textWidth = ctx.measureText(priceText).width;
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
-            ctx.beginPath();
-            ctx.roundRect(canvas.width - textWidth - 20, 10, textWidth + 16, 26, 6);
-            ctx.fill();
-            
-            ctx.fillStyle = '#22c55e'; // Green text
-            ctx.fillText(priceText, canvas.width - 12, 28);
-        }
-
-        let pollInterval = null;
-
-        function connectWS() {
-            // Use 127.0.0.1 for maximum compatibility on Windows
-            const host = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
-            const wsUrl = `ws://${host}:${window.location.port}/ws/price`;
-            console.log("Attempting WS connection to:", wsUrl);
-
-            const ws = new WebSocket(wsUrl);
-
-            ws.onopen = () => {
-                console.log("SUCCESS: Socket Connected!");
-                document.getElementById('botStatus').innerText = "LIVE DATA ACTIVE";
-                document.getElementById('botStatus').style.color = "#10b981"; // Success Green
-                if (pollInterval) clearInterval(pollInterval);
-                pollInterval = null;
-            };
-
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-
-                // Fetch the active symbols to know what to display
-                const symbolsInput = document.getElementById('cfgSymbols').value;
-                const mainSymbol = symbolsInput.split(',')[0].trim().toUpperCase();
-                document.getElementById('activeAsset').innerText = mainSymbol;
-
-                if (data.symbol === mainSymbol) {
-                    updateChart(data.price);
-                    document.getElementById('livePrice').innerText = `$${data.price.toFixed(4)}`;
-                    document.getElementById('livePrice').style.color = "#60a5fa"; // Active Blue
-                }
-            };
-
-            ws.onerror = () => ws.close();
-
-            ws.onclose = () => {
-                console.log("Socket Closed. Starting Fallback Polling...");
-                if (!pollInterval) {
-                    pollInterval = setInterval(async () => {
-                        try {
-                            const symbolsInput = document.getElementById('cfgSymbols').value;
-                            const mainSymbol = symbolsInput.split(',')[0].trim().toUpperCase();
-                            const res = await fetch(`/api/price?symbol=${mainSymbol}`);
-                            const data = await res.json();
-                            if (data.price > 0) {
-                                updateChart(data.price);
-                                document.getElementById('livePrice').innerText = `$${data.price.toFixed(4)} (Rest Mode)`;
-                            }
-                        } catch (e) { }
-                    }, 1500);
-                }
-                setTimeout(connectWS, 5000);
-            };
-        }
-
-        async function updateData() {
-            try {
-                // Stats
-                const statsRes = await fetch('/api/stats');
-                const stats = await statsRes.json();
-                document.getElementById('statBalance').innerText = stats.wallet_balance;
-                document.getElementById('statPnL').innerText = stats.total_pnl;
-                document.getElementById('statWinRate').innerText = stats.win_rate;
-                document.getElementById('statTrades').innerText = stats.total_trades;
-                document.getElementById('confBar').style.width = stats.latest_confidence + '%';
-                document.getElementById('confVal').innerText = stats.latest_confidence + '%';
-
-                // Trades
-                const tradesRes = await fetch('/api/trades');
-                const trades = await tradesRes.json();
-                const tradeBody = document.getElementById('tradeBody');
-                tradeBody.innerHTML = '';
-                trades.forEach(t => {
-                    const row = document.createElement('tr');
-                    const pnlClass = t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
-                    const time = t.entry_time ? new Date(t.entry_time).toLocaleTimeString() : '---';
-                    const isOpen = t.status === 'OPEN';
-                    
-                    row.innerHTML = `
-                        <td style="padding: 0.5rem;">${time}</td>
-                        <td style="font-weight: bold;">${t.symbol}</td>
-                        <td style="color: ${t.side === 'BUY' ? 'var(--success)' : 'var(--danger)'}">${t.side}</td>
-                        <td>${t.leverage}x</td>
-                        <td>${t.quantity}</td>
-                        <td>$${t.entry_price.toFixed(t.entry_price < 1 ? 4 : 2)}</td>
-                        <td>
-                            ${isOpen ? `<input type="number" id="tp_${t.id}" value="${t.tp_price}" step="0.0001" style="width: 80px; padding: 2px; font-size: 0.8rem; background: #0f172a; border: 1px solid #334155; color: var(--success);">` : `$${t.tp_price ? t.tp_price.toFixed(t.tp_price < 1 ? 4 : 2) : '---'}`}
-                        </td>
-                        <td>
-                            ${isOpen ? `<input type="number" id="sl_${t.id}" value="${t.sl_price}" step="0.0001" style="width: 80px; padding: 2px; font-size: 0.8rem; background: #0f172a; border: 1px solid #334155; color: var(--danger);">` : `$${t.sl_price ? t.sl_price.toFixed(t.sl_price < 1 ? 4 : 2) : '---'}`}
-                        </td>
-                        <td class="${pnlClass}">${t.pnl ? t.pnl.toFixed(2) : '0.00'}</td>
-                        <td>
-                            ${isOpen ? `<button onclick="updateProtection(${t.id})" class="btn" style="padding: 2px 8px; font-size: 0.7rem; background: var(--primary);">Sync</button>` : '<span style="color: var(--text-dim); font-size: 0.7rem;">Fixed</span>'}
-                        </td>
-                    `;
-                    tradeBody.appendChild(row);
-                });
-
-                // Logs
-                const logsRes = await fetch('/api/logs');
-                const logs = await logsRes.json();
-                const lcon = document.getElementById('logsContainer');
-                lcon.innerHTML = logs.map(l => `
-                    <div class="log-entry ${l.level === 'error' ? 'log-error' : (l.level === 'warning' ? 'log-warn' : (l.level === 'success' ? 'log-success' : ''))}">
-                        <span style="color: #64748b">${new Date(l.timestamp).toLocaleTimeString()}</span>
-                        <b style="color: ${l.level === 'error' ? '#ef4444' : (l.level === 'warning' ? '#f59e0b' : (l.level === 'success' ? '#22c55e' : '#3b82f6'))}">${l.level.toUpperCase()}</b>
-                        ${l.message}
-                    </div>
-                `).join('');
-
-                // Status
-                const statusRes = await fetch('/api/bot/status');
-                const status = await statusRes.json();
-                isRunning = status.running;
-                const tBtn = document.getElementById('toggleBtn');
-                const sTxt = document.getElementById('botStatus');
-                tBtn.innerText = isRunning ? 'Stop Bot' : 'Start Bot';
-                tBtn.className = 'btn ' + (isRunning ? 'btn-stop' : 'btn-start');
-                sTxt.innerText = isRunning ? 'Bot Scanning...' : 'Bot Idle';
-                sTxt.style.color = isRunning ? '#22c55e' : '#ef4444';
-
-            } catch (e) { console.error('Update Error', e); }
-        }
-
-        document.getElementById('toggleBtn').onclick = async () => {
-            const action = isRunning ? 'stop' : 'start';
-            await fetch(`/api/bot/${action}`, { method: 'POST' });
-            updateData();
-        };
-
-        document.getElementById('resetBtn').onclick = async () => {
-            if (!confirm('Reset Daily PnL Counter?')) return;
-            await fetch('/api/bot/reset_pnl', { method: 'POST' });
-            alert('Reset Successful!');
-            updateData();
-        };
-
-        async function logout() {
-            localStorage.removeItem('binbot_logged_in');
-            await fetch('/api/logout');
-            window.location.href = '/dashboard/login.html';
-        }
-
-        async function updateStats() {
-            try {
-                const response = await fetch('/api/stats');
-                if (response.status === 401) {
-                    localStorage.removeItem('binbot_logged_in');
-                    window.location.href = '/dashboard/login.html';
-                    return;
-                }
-                const data = await response.json();
-                document.getElementById('statBalance').innerText = data.wallet_balance;
-                document.getElementById('statPnL').innerText = data.total_pnl;
-                document.getElementById('statWinRate').innerText = data.win_rate;
-                document.getElementById('statTrades').innerText = data.total_trades;
-
-                // Update AI Confidence Bar
-                document.getElementById('confBar').style.width = data.latest_confidence + '%';
-                document.getElementById('confVal').innerText = data.latest_confidence + '%';
-            } catch (e) { console.error('Update Stats Error', e); }
-        }
-
-        async function loadConfig() {
-            try {
-                const res = await fetch('/api/config');
-                const cfg = await res.json();
-                document.getElementById('cfgLev').value = cfg.leverage;
-                document.getElementById('cfgTP').value = cfg.take_profit;
-                document.getElementById('cfgSL').value = cfg.stop_loss;
-                document.getElementById('cfgDLL').value = cfg.daily_loss_limit;
-                document.getElementById('cfgDynamic').value = cfg.use_dynamic.toString();
-                document.getElementById('cfgRiskPct').value = cfg.dynamic_risk_pct;
-                document.getElementById('cfgDCA').value = cfg.dca.toString();
-                document.getElementById('cfgTrailing').value = cfg.trailing_sl.toString();
-                if (cfg.trailing_tp !== undefined) {
-                    document.getElementById('cfgTTP').value = cfg.trailing_tp.toString();
-                } else {
-                    document.getElementById('cfgTTP').value = "true";
-                }
-                document.getElementById('cfgTTPAct').value = cfg.trailing_tp_activation;
-                document.getElementById('cfgTTPCall').value = cfg.trailing_tp_callback;
-                document.getElementById('cfgSymbols').value = cfg.symbols;
-                document.getElementById('cfgTestnet').value = cfg.use_testnet.toString();
-                if (cfg.static_tp_enabled !== undefined) {
-                    document.getElementById('cfgStaticTP').value = cfg.static_tp_enabled.toString();
-                }
-                if (cfg.static_tp_roi !== undefined) {
-                    document.getElementById('cfgStaticTPROI').value = cfg.static_tp_roi;
-                }
-                // Set active asset label immediately
-                const firstSymbol = cfg.symbols.split(',')[0].trim().toUpperCase();
-                document.getElementById('activeAsset').innerText = firstSymbol;
-                document.getElementById('livePrice').innerText = '$0.00';
-            } catch (e) { console.error('Config Load Error', e); }
-        }
-
-        document.getElementById('saveBtn').onclick = async () => {
-            const data = {
-                leverage: document.getElementById('cfgLev').value,
-                take_profit: document.getElementById('cfgTP').value,
-                stop_loss: document.getElementById('cfgSL').value,
-                daily_loss_limit: document.getElementById('cfgDLL').value,
-                use_dynamic: document.getElementById('cfgDynamic').value,
-                dynamic_risk_pct: document.getElementById('cfgRiskPct').value,
-                dca: document.getElementById('cfgDCA').value,
-                trailing_sl: document.getElementById('cfgTrailing').value,
-                trailing_tp: document.getElementById('cfgTTP').value,
-                trailing_tp_activation: document.getElementById('cfgTTPAct').value,
-                trailing_tp_callback: document.getElementById('cfgTTPCall').value,
-                symbols: document.getElementById('cfgSymbols').value,
-                use_testnet: document.getElementById('cfgTestnet').value,
-                static_tp_enabled: document.getElementById('cfgStaticTP').value,
-                static_tp_roi: document.getElementById('cfgStaticTPROI').value
-            };
-            const res = await fetch('/api/config/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            const result = await res.json();
-            if (result.message) alert('Configuration Saved to Database!');
-            else alert('Error: ' + result.error);
-        };
-
-        setInterval(updateData, 5000);
-        initChart();
-        connectWS();
-        window.onresize = initChart;
-
-        async function updateProtection(tradeId) {
-            const tp = document.getElementById(`tp_${tradeId}`).value;
-            const sl = document.getElementById(`sl_${tradeId}`).value;
-            const res = await fetch(`/api/trades/${tradeId}/protection`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tp_price: tp, sl_price: sl })
-            });
-            const result = await res.json();
-            if (result.message) alert(result.message);
-            else alert('Error: ' + result.error);
-            updateData();
-        }
-
+        // Initialize layout on DOM load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeLayout('overview');
+        });
+        
         function copyLogs() {
-            const logs = document.getElementById('logsContainer').innerText;
-            const btn = event.target;
-            const oldText = btn.innerText;
-
-            function showSuccess() {
-                btn.innerText = 'Copied!';
-                btn.style.background = 'var(--success)';
-                setTimeout(() => {
-                    btn.innerText = oldText;
-                    btn.style.background = '#334155';
-                }, 2000);
-            }
-
-            // Modern API (Requires HTTPS)
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(logs).then(showSuccess).catch(fallbackCopy);
-            } else {
-                fallbackCopy();
-            }
-
-            function fallbackCopy() {
-                const textArea = document.createElement("textarea");
-                textArea.value = logs;
-                document.body.appendChild(textArea);
-                textArea.select();
-                try {
-                    document.execCommand('copy');
-                    showSuccess();
-                } catch (err) {
-                    alert('Manual copy required: ' + err);
-                }
-                document.body.removeChild(textArea);
-            }
+            const logs = Array.from(document.querySelectorAll('#logsContainer .log-entry'))
+                .map(el => el.innerText)
+                .join('\n');
+            navigator.clipboard.writeText(logs).then(() => {
+                showToast("Logs copied to clipboard!", "success");
+            }).catch(err => {
+                showToast("Failed to copy logs: " + err, "error");
+            });
         }
-
-        // Init
-        loadConfig();
-        updateData();
     </script>
 </body>
-
 </html>

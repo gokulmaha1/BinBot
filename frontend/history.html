@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BinBot PRO | Trade History</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <style>
+        .history-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .filter-bar {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .filter-group label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .filter-group select, .filter-group input {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.85rem;
+            min-width: 120px;
+        }
+
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .pagination-info {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .pagination-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Navigation Container -->
+    <div id="sidebar-container"></div>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Top Status/Metric Header Container -->
+        <div id="header-container"></div>
+
+        <div class="history-layout">
+            <!-- Stats Summary Cards -->
+            <section class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Closed PnL</span>
+                        <span class="stat-icon">💰</span>
+                    </div>
+                    <div id="hist-total-pnl" class="stat-number">$0.00</div>
+                    <div class="stat-change text-secondary">All-time realized</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Win Rate</span>
+                        <span class="stat-icon">📈</span>
+                    </div>
+                    <div id="hist-win-rate" class="stat-number">0.0%</div>
+                    <div id="hist-win-losing-count" class="stat-change text-secondary">0 W / 0 L</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Avg Holding Time</span>
+                        <span class="stat-icon">⏱️</span>
+                    </div>
+                    <div id="hist-avg-hold" class="stat-number">0.0 min</div>
+                    <div class="stat-change text-secondary">Per position</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Best Trade</span>
+                        <span class="stat-icon" style="color: var(--success);">🏆</span>
+                    </div>
+                    <div id="hist-best-pnl" class="stat-number">$0.00</div>
+                    <div class="stat-change text-secondary">Single max return</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Worst Trade</span>
+                        <span class="stat-icon" style="color: var(--danger);">💀</span>
+                    </div>
+                    <div id="hist-worst-pnl" class="stat-number">$0.00</div>
+                    <div class="stat-change text-secondary">Single max drawdown</div>
+                </div>
+            </section>
+
+            <!-- Table Card -->
+            <div class="card">
+                <div class="card-title">Completed Futures Trades</div>
+                
+                <div class="filter-bar">
+                    <div class="filter-group">
+                        <label for="filter-symbol">Symbol</label>
+                        <input type="text" id="filter-symbol" placeholder="e.g. BTCUSDT" style="width: 140px;">
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-status">Status</label>
+                        <select id="filter-status">
+                            <option value="closed">Closed Only</option>
+                            <option value="">All Trades</option>
+                            <option value="open">Open Only</option>
+                            <option value="partial_tp">Partial TP Only</option>
+                        </select>
+                    </div>
+                    <button id="btn-apply-filters" class="btn btn-primary" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: 6px;">
+                        Apply Filters
+                    </button>
+                    <button id="btn-clear-filters" class="btn btn-secondary" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: 6px;">
+                        Clear
+                    </button>
+                </div>
+
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Exit Time</th>
+                                <th>Symbol</th>
+                                <th>Side</th>
+                                <th>Strategy</th>
+                                <th>Leverage</th>
+                                <th>Qty</th>
+                                <th>Entry Price</th>
+                                <th>Exit Price</th>
+                                <th>Fees</th>
+                                <th>Realized PnL</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body">
+                            <tr>
+                                <td colspan="11" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                    Loading history...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination controls -->
+                <div class="pagination-container">
+                    <div class="pagination-info" id="pagination-info">
+                        Showing page 1 of 1 (0 total trades)
+                    </div>
+                    <div class="pagination-buttons">
+                        <button id="btn-prev-page" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; border-radius: 6px;" disabled>
+                            ◀ Prev
+                        </button>
+                        <button id="btn-next-page" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; border-radius: 6px;" disabled>
+                            Next ▶
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Load Socket.IO, app.js, and page-specific JS -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/history.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeLayout('history');
+        });
+    </script>
+</body>
+</html>

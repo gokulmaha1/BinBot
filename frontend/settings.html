@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BinBot PRO | System Settings</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <style>
+        .settings-layout {
+            display: grid;
+            grid-template-columns: 1.6fr 1.4fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .settings-card {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--primary);
+            margin-bottom: 1rem;
+            padding-bottom: 0.4rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .readonly-value {
+            background-color: rgba(255, 255, 255, 0.02);
+            color: var(--text-secondary);
+            border: 1px dashed var(--border-color);
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 1024px) {
+            .settings-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Navigation Container -->
+    <div id="sidebar-container"></div>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Top Status/Metric Header Container -->
+        <div id="header-container"></div>
+
+        <div class="settings-layout">
+            <!-- Left: Bot Parameters -->
+            <div class="settings-card">
+                <!-- Modifiable configs -->
+                <div class="card">
+                    <div class="card-title">AI Engine Parameters</div>
+                    
+                    <div class="section-title">Trade Allocations</div>
+                    <div class="form-grid" style="margin-bottom: 1.5rem;">
+                        <div class="form-group">
+                            <label for="cfg-capital-pct">Capital Allocation per Trade (%)</label>
+                            <input type="number" id="cfg-capital-pct" min="1" max="50" step="1" placeholder="e.g. 10">
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Percentage of wallet used per position margin (1% - 50%).</span>
+                        </div>
+                        <div class="form-group">
+                            <!-- Placeholder filler -->
+                        </div>
+                    </div>
+
+                    <div class="section-title">Take Profit Tiers</div>
+                    <div class="form-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 1.5rem;">
+                        <div class="form-group">
+                            <label for="cfg-tp1-ratio">TP1 Ratio (x R:R)</label>
+                            <input type="number" id="cfg-tp1-ratio" step="0.1" placeholder="e.g. 1.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfg-tp1-close">TP1 Close Amount (%)</label>
+                            <input type="number" id="cfg-tp1-close" step="5" placeholder="e.g. 40">
+                        </div>
+                        <div class="form-group">
+                            <label style="color: transparent;">Gap</label>
+                            <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 10px;">Tier 1 target. Default: 1.0x R:R, closing 40% quantity.</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cfg-tp2-ratio">TP2 Ratio (x R:R)</label>
+                            <input type="number" id="cfg-tp2-ratio" step="0.1" placeholder="e.g. 2.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfg-tp2-close">TP2 Close Amount (%)</label>
+                            <input type="number" id="cfg-tp2-close" step="5" placeholder="e.g. 30">
+                        </div>
+                        <div class="form-group">
+                            <label style="color: transparent;">Gap</label>
+                            <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 10px;">Tier 2 target. Default: 2.0x R:R, closing 30% quantity.</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cfg-tp3-ratio">TP3 Ratio (x R:R)</label>
+                            <input type="number" id="cfg-tp3-ratio" step="0.1" placeholder="e.g. 3.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfg-tp3-close">TP3 Close Amount (%)</label>
+                            <input type="number" id="cfg-tp3-close" step="5" placeholder="e.g. 30">
+                        </div>
+                        <div class="form-group">
+                            <label style="color: transparent;">Gap</label>
+                            <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 10px;">Tier 3 target. Default: 3.0x R:R, closing remaining 30% quantity.</span>
+                        </div>
+                    </div>
+
+                    <div class="section-title">Scanner Constraints</div>
+                    <div class="form-grid" style="margin-bottom: 1.5rem;">
+                        <div class="form-group">
+                            <label for="cfg-scan-volume">Min 24h Volume (USDT)</label>
+                            <input type="number" id="cfg-scan-volume" step="1000000" placeholder="e.g. 50000000">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfg-scan-top">Ranked Pairs Limit</label>
+                            <input type="number" id="cfg-scan-top" min="5" max="50" placeholder="e.g. 20">
+                        </div>
+                    </div>
+
+                    <button id="btn-save-params" class="btn btn-primary" style="width: 100%;">
+                        💾 Save Engine Configuration
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right: Exchange Accounts & Readonly rules -->
+            <div class="settings-card">
+                <!-- API Integration -->
+                <div class="card">
+                    <div class="card-title">Binance API Integration</div>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Add API credentials for Binance Futures execution. Secret keys are encrypted at rest with AES-256 GCM.
+                    </p>
+
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label for="ex-api-key">API Key</label>
+                        <input type="text" id="ex-api-key" placeholder="Enter Binance API Key">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label for="ex-api-secret">API Secret</label>
+                        <input type="password" id="ex-api-secret" placeholder="Enter Binance API Secret">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label for="ex-mode">Exchange Mode</label>
+                        <select id="ex-mode">
+                            <option value="testnet">Binance Futures Testnet</option>
+                            <option value="paper">Local Paper Trading Simulation</option>
+                            <option value="live">Binance Futures Live Account</option>
+                        </select>
+                    </div>
+
+                    <button id="btn-add-exchange" class="btn btn-primary" style="width: 100%;">
+                        🔑 Link API Credentials
+                    </button>
+
+                    <div class="card-divider"></div>
+
+                    <div class="card-title" style="font-size: 1rem;">Active Accounts</div>
+                    <div style="overflow-x: auto;">
+                        <table style="font-size: 0.85rem;">
+                            <thead>
+                                <tr>
+                                    <th>Exchange</th>
+                                    <th>API Preview</th>
+                                    <th>Mode</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="accounts-table-body">
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 1rem;">
+                                        No active API links.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Readonly engine rules -->
+                <div class="card">
+                    <div class="card-title">Immutable Hard Limits</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Max Leverage</label>
+                            <div class="readonly-value" id="ro-max-lev">5x</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Max Positions</label>
+                            <div class="readonly-value" id="ro-max-pos">3</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Max Daily Loss</label>
+                            <div class="readonly-value" id="ro-daily-loss">3.00%</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Max Drawdown</label>
+                            <div class="readonly-value" id="ro-drawdown">8.00%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Load Socket.IO, app.js, and page-specific JS -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/settings.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeLayout('settings');
+        });
+    </script>
+</body>
+</html>

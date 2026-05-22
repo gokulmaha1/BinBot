@@ -1,0 +1,578 @@
+"""
+BinBot AI Auto Mode — Trade Execution Engine
+Async wrapper around Binance Futures API for order management.
+
+All orders use workingType='CONTRACT_PRICE'.
+Retry failed orders 3 times with 1 s delay.
+Duplicate prevention: checks existing orders before placing.
+Slippage tracked on every market fill.
+"""
+
+import asyncio
+import logging
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Optional
+from uuid import UUID
+
+from sqlalchemy import select, and_
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.models import (
+    Trade,
+    Position,
+    TradeStatus,
+    TradeState,
+    SignalSide,
+)
+
+logger = logging.getLogger(__name__)
+
+# ── Constants ────────────────────────────────────────────────────
+MAX_RETRIES: int = 3
+RETRY_DELAY_SECONDS: float = 1.0
+WORKING_TYPE: str = "CONTRACT_PRICE"
+
+
+@dataclass
+class OrderResult:
+    """Single Binance order response."""
+
+    order_id: str = ""
+    client_order_id: str = ""
+    symbol: str = ""
+    side: str = ""
+    order_type: str = ""
+    status: str = ""
+    price: float = 0.0
+    avg_price: float = 0.0
+    quantity: float = 0.0
+    filled_qty: float = 0.0
+    raw: dict = field(default_factory=dict)
+
+
+@dataclass
+class TradeResult:
+    """Aggregate result of executing a full trade (entry + TP + SL)."""
+
+    success: bool
+    trade_id: Optional[UUID] = None
+    entry_price: float = 0.0
+    entry_order: Optional[OrderResult] = None
+    tp_orders: list[OrderResult] = field(default_factory=list)
+    sl_order: Optional[OrderResult] = None
+    slippage: float = 0.0
+    error: str = ""
+
+
+class TradeExecutor:
+    """
+    Async trade execution engine for Binance Futures.
+
+    Wraps the python-binance ``AsyncClient`` and records all trades
+    in the database.
+    """
+
+    def __init__(self, client: Any, db_session: AsyncSession) -> None:
+        """
+        Args:
+            client: ``binance.AsyncClient`` instance (or testnet client).
+            db_session: SQLAlchemy async session.
+        """
+        self.client = client
+        self.db = db_session
+        self._exchange_info_cache: Optional[dict] = None
+        self._exchange_info_ts: float = 0.0
+
+    # ─────────────────────────────────────────────────────────────
+    #  FULL TRADE EXECUTION
+    # ─────────────────────────────────────────────────────────────
+
+    async def execute_trade(
+        self,
+        signal: Any,
+        position_size: Any,
+        tp_levels: Any,
+        sl_price: float,
+        bot_id: UUID,
+        strategy_name: str = "auto",
+    ) -> TradeResult:
+        """
+        Execute a complete trade:
+        1. Set leverage + isolated margin
+        2. Place market entry order
+        3. Place TP1, TP2, TP3 as TAKE_PROFIT_MARKET
+        4. Place SL as STOP_MARKET
+        5. Record trade in DB
+        """
+        symbol: str = signal.symbol if hasattr(signal, "symbol") else signal["symbol"]
+        side: str = signal.side if hasattr(signal, "side") else signal["side"]
+        quantity: float = position_size.quantity if hasattr(position_size, "quantity") else position_size["quantity"]
+        leverage: int = position_size.leverage if hasattr(position_size, "leverage") else position_size["leverage"]
+
+        try:
+            # ── 1. Account setup ─────────────────────────────────
+            await self._setup_account(symbol, leverage)
+
+            # ── 2. Duplicate prevention ──────────────────────────
+            existing = await self._get_open_orders(symbol)
+            if any(o.get("type") == "MARKET" and o.get("status") == "NEW" for o in existing):
+                return TradeResult(success=False, error=f"Duplicate market order detected for {symbol}")
+
+            # ── 3. Market entry ──────────────────────────────────
+            entry_order = await self._place_market_order(symbol, side, quantity)
+            if entry_order is None:
+                return TradeResult(success=False, error=f"Entry order failed for {symbol}")
+
+            entry_price = entry_order.avg_price or entry_order.price
+            if entry_price <= 0:
+                # Fetch from position as fallback
+                entry_price = await self._get_entry_from_position(symbol) or 0.0
+
+            # Slippage tracking
+            requested_price = signal.price if hasattr(signal, "price") else signal.get("price", entry_price)
+            slippage = abs(entry_price - requested_price) / requested_price if requested_price > 0 else 0.0
+
+            # ── 4. Protection orders (TP + SL) ───────────────────
+            exit_side = "SELL" if side in ("BUY", SignalSide.BUY) else "BUY"
+            tp_orders: list[OrderResult] = []
+
+            # TP1
+            tp1_order = await self._place_tp_order(
+                symbol, exit_side, tp_levels.tp1.quantity, tp_levels.tp1.price, "TP1"
+            )
+            if tp1_order:
+                tp_orders.append(tp1_order)
+
+            # TP2
+            tp2_order = await self._place_tp_order(
+                symbol, exit_side, tp_levels.tp2.quantity, tp_levels.tp2.price, "TP2"
+            )
+            if tp2_order:
+                tp_orders.append(tp2_order)
+
+            # TP3
+            tp3_order = await self._place_tp_order(
+                symbol, exit_side, tp_levels.tp3.quantity, tp_levels.tp3.price, "TP3"
+            )
+            if tp3_order:
+                tp_orders.append(tp3_order)
+
+            # SL
+            sl_order = await self._place_sl_order(symbol, exit_side, sl_price)
+
+            # ── 5. Record in DB ──────────────────────────────────
+            trade_id = await self._record_trade(
+                bot_id=bot_id,
+                signal=signal,
+                symbol=symbol,
+                side=side,
+                strategy_name=strategy_name,
+                leverage=leverage,
+                entry_price=entry_price,
+                quantity=quantity,
+                sl_price=sl_price,
+                tp_levels=tp_levels,
+                entry_order=entry_order,
+                slippage=slippage,
+            )
+
+            result = TradeResult(
+                success=True,
+                trade_id=trade_id,
+                entry_price=entry_price,
+                entry_order=entry_order,
+                tp_orders=tp_orders,
+                sl_order=sl_order,
+                slippage=round(slippage, 6),
+            )
+
+            logger.info(
+                "Trade executed: %s %s %s @ %.4f | SL=%.4f | slippage=%.4f%%",
+                side, quantity, symbol, entry_price, sl_price, slippage * 100,
+            )
+            return result
+
+        except Exception as exc:
+            logger.error("Trade execution failed: %s", exc, exc_info=True)
+            return TradeResult(success=False, error=str(exc))
+
+    # ─────────────────────────────────────────────────────────────
+    #  POSITION MANAGEMENT
+    # ─────────────────────────────────────────────────────────────
+
+    async def close_position(self, symbol: str, quantity: float, reason: str = "manual") -> Optional[OrderResult]:
+        """Close a position via market order."""
+        try:
+            # Determine current side from position
+            positions = await self.get_open_positions()
+            pos = next((p for p in positions if p["symbol"] == symbol and float(p.get("positionAmt", 0)) != 0), None)
+            if pos is None:
+                logger.warning("No open position found for %s", symbol)
+                return None
+
+            pos_amt = float(pos["positionAmt"])
+            close_side = "SELL" if pos_amt > 0 else "BUY"
+            close_qty = min(abs(pos_amt), quantity)
+
+            # Cancel existing orders first
+            await self.cancel_orders(symbol)
+
+            order = await self._place_market_order(symbol, close_side, close_qty)
+            if order:
+                logger.info("Position closed: %s %s qty=%s reason=%s", close_side, symbol, close_qty, reason)
+            return order
+
+        except Exception as exc:
+            logger.error("Failed to close position %s: %s", symbol, exc, exc_info=True)
+            return None
+
+    async def modify_sl(self, symbol: str, new_sl_price: float) -> Optional[OrderResult]:
+        """
+        Move the stop-loss to a new price.
+
+        Cancels the old SL and places a new STOP_MARKET.
+        """
+        try:
+            # Cancel existing SL
+            open_orders = await self._get_open_orders(symbol)
+            for order in open_orders:
+                if order.get("type") in ("STOP_MARKET", "STOP"):
+                    await self._cancel_order(symbol, order["orderId"])
+
+            # Determine exit side
+            positions = await self.get_open_positions()
+            pos = next((p for p in positions if p["symbol"] == symbol and float(p.get("positionAmt", 0)) != 0), None)
+            if pos is None:
+                logger.warning("No position to modify SL for %s", symbol)
+                return None
+
+            pos_amt = float(pos["positionAmt"])
+            exit_side = "SELL" if pos_amt > 0 else "BUY"
+
+            new_order = await self._place_sl_order(symbol, exit_side, new_sl_price)
+            if new_order:
+                logger.info("SL modified: %s new_sl=%.4f", symbol, new_sl_price)
+            return new_order
+
+        except Exception as exc:
+            logger.error("Failed to modify SL for %s: %s", symbol, exc, exc_info=True)
+            return None
+
+    async def cancel_orders(self, symbol: str) -> bool:
+        """Cancel all open orders for a symbol."""
+        try:
+            await self.client.futures_cancel_all_open_orders(symbol=symbol)
+            logger.info("All open orders cancelled for %s", symbol)
+            return True
+        except Exception as exc:
+            logger.error("Failed to cancel orders for %s: %s", symbol, exc)
+            return False
+
+    async def get_open_positions(self) -> list[dict]:
+        """Fetch all open positions from Binance."""
+        try:
+            account = await self.client.futures_account()
+            positions = [
+                p for p in account.get("positions", [])
+                if float(p.get("positionAmt", 0)) != 0
+            ]
+            return positions
+        except Exception as exc:
+            logger.error("Failed to fetch positions: %s", exc, exc_info=True)
+            return []
+
+    # ─────────────────────────────────────────────────────────────
+    #  PRECISION HELPERS
+    # ─────────────────────────────────────────────────────────────
+
+    async def get_quantity_precision(self, symbol: str) -> int:
+        """Get LOT_SIZE step precision for a symbol."""
+        filters = await self._get_symbol_filters(symbol)
+        for f in filters:
+            if f["filterType"] == "LOT_SIZE":
+                step_size = f["stepSize"]
+                return self._precision_from_step(step_size)
+        return 3
+
+    async def get_price_precision(self, symbol: str) -> int:
+        """Get PRICE_FILTER tick precision for a symbol."""
+        filters = await self._get_symbol_filters(symbol)
+        for f in filters:
+            if f["filterType"] == "PRICE_FILTER":
+                tick_size = f["tickSize"]
+                return self._precision_from_step(tick_size)
+        return 2
+
+    async def round_quantity(self, symbol: str, qty: float) -> float:
+        """Round quantity to valid LOT_SIZE step."""
+        precision = await self.get_quantity_precision(symbol)
+        if precision == 0:
+            return int(qty)
+        return round(float(qty), precision)
+
+    async def round_price(self, symbol: str, price: float) -> float:
+        """Round price to valid PRICE_FILTER tick."""
+        precision = await self.get_price_precision(symbol)
+        return round(float(price), precision)
+
+    # ─────────────────────────────────────────────────────────────
+    #  PRIVATE — ORDER PLACEMENT WITH RETRY
+    # ─────────────────────────────────────────────────────────────
+
+    async def _place_market_order(self, symbol: str, side: str, quantity: float) -> Optional[OrderResult]:
+        """Place a market order with retry logic."""
+        rounded_qty = await self.round_quantity(symbol, quantity)
+        if rounded_qty <= 0:
+            logger.error("Quantity rounded to 0 for %s", symbol)
+            return None
+
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info("[EXEC] Attempt %d: MARKET %s %s qty=%s", attempt, side, symbol, rounded_qty)
+                result = await self.client.futures_create_order(
+                    symbol=symbol,
+                    side=side,
+                    type="MARKET",
+                    quantity=rounded_qty,
+                )
+                return self._parse_order(result)
+            except Exception as exc:
+                logger.warning("Market order attempt %d failed: %s", attempt, exc)
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(RETRY_DELAY_SECONDS)
+        return None
+
+    async def _place_tp_order(
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
+        stop_price: float,
+        label: str,
+    ) -> Optional[OrderResult]:
+        """Place a TAKE_PROFIT_MARKET order with retry."""
+        rounded_qty = await self.round_quantity(symbol, quantity)
+        rounded_price = await self.round_price(symbol, stop_price)
+
+        if rounded_qty <= 0:
+            logger.warning("TP %s quantity rounded to 0 for %s — skipping", label, symbol)
+            return None
+
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(
+                    "[EXEC] Attempt %d: %s TAKE_PROFIT_MARKET %s qty=%s @ %s",
+                    attempt, label, symbol, rounded_qty, rounded_price,
+                )
+                result = await self.client.futures_create_order(
+                    symbol=symbol,
+                    side=side,
+                    type="TAKE_PROFIT_MARKET",
+                    quantity=rounded_qty,
+                    stopPrice=rounded_price,
+                    workingType=WORKING_TYPE,
+                    reduceOnly=True,
+                )
+                return self._parse_order(result)
+            except Exception as exc:
+                logger.warning("%s order attempt %d failed: %s", label, attempt, exc)
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(RETRY_DELAY_SECONDS)
+        return None
+
+    async def _place_sl_order(
+        self,
+        symbol: str,
+        side: str,
+        stop_price: float,
+    ) -> Optional[OrderResult]:
+        """Place a STOP_MARKET order with retry. Uses closePosition for full SL."""
+        rounded_price = await self.round_price(symbol, stop_price)
+
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(
+                    "[EXEC] Attempt %d: STOP_MARKET %s @ %s (closePosition)",
+                    attempt, symbol, rounded_price,
+                )
+                result = await self.client.futures_create_order(
+                    symbol=symbol,
+                    side=side,
+                    type="STOP_MARKET",
+                    stopPrice=rounded_price,
+                    closePosition=True,
+                    workingType=WORKING_TYPE,
+                )
+                return self._parse_order(result)
+            except Exception as exc:
+                logger.warning("SL order attempt %d failed: %s", attempt, exc)
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(RETRY_DELAY_SECONDS)
+        return None
+
+    # ─────────────────────────────────────────────────────────────
+    #  PRIVATE — ACCOUNT SETUP
+    # ─────────────────────────────────────────────────────────────
+
+    async def _setup_account(self, symbol: str, leverage: int) -> None:
+        """Set leverage and isolated margin for the symbol."""
+        try:
+            await self.client.futures_change_leverage(symbol=symbol, leverage=leverage)
+        except Exception as exc:
+            logger.debug("Leverage set note for %s: %s", symbol, exc)
+
+        try:
+            await self.client.futures_change_margin_type(symbol=symbol, marginType="ISOLATED")
+        except Exception as exc:
+            # Margin type may already be set
+            if "No need to change margin type" not in str(exc):
+                logger.debug("Margin type note for %s: %s", symbol, exc)
+
+    # ─────────────────────────────────────────────────────────────
+    #  PRIVATE — ORDER & POSITION QUERIES
+    # ─────────────────────────────────────────────────────────────
+
+    async def _get_open_orders(self, symbol: str) -> list[dict]:
+        """Fetch open orders for a symbol."""
+        try:
+            return await self.client.futures_get_open_orders(symbol=symbol)
+        except Exception as exc:
+            logger.error("Failed to get open orders for %s: %s", symbol, exc)
+            return []
+
+    async def _cancel_order(self, symbol: str, order_id: str) -> bool:
+        """Cancel a single order by ID."""
+        try:
+            await self.client.futures_cancel_order(symbol=symbol, orderId=order_id)
+            return True
+        except Exception as exc:
+            logger.warning("Failed to cancel order %s on %s: %s", order_id, symbol, exc)
+            return False
+
+    async def _get_entry_from_position(self, symbol: str) -> Optional[float]:
+        """Fetch entry price from Binance position data."""
+        try:
+            positions = await self.get_open_positions()
+            for p in positions:
+                if p["symbol"] == symbol:
+                    return float(p.get("entryPrice", 0))
+        except Exception:
+            pass
+        return None
+
+    # ─────────────────────────────────────────────────────────────
+    #  PRIVATE — EXCHANGE INFO CACHE
+    # ─────────────────────────────────────────────────────────────
+
+    async def _get_exchange_info(self) -> dict:
+        """Fetch and cache exchange info (refreshes every 5 min)."""
+        import time
+        now = time.time()
+        if self._exchange_info_cache is None or (now - self._exchange_info_ts) > 300:
+            self._exchange_info_cache = await self.client.futures_exchange_info()
+            self._exchange_info_ts = now
+        return self._exchange_info_cache
+
+    async def _get_symbol_filters(self, symbol: str) -> list[dict]:
+        """Get filters for a specific symbol."""
+        info = await self._get_exchange_info()
+        for s in info.get("symbols", []):
+            if s["symbol"] == symbol:
+                return s.get("filters", [])
+        return []
+
+    # ─────────────────────────────────────────────────────────────
+    #  PRIVATE — DB RECORDING
+    # ─────────────────────────────────────────────────────────────
+
+    async def _record_trade(
+        self,
+        bot_id: UUID,
+        signal: Any,
+        symbol: str,
+        side: str,
+        strategy_name: str,
+        leverage: int,
+        entry_price: float,
+        quantity: float,
+        sl_price: float,
+        tp_levels: Any,
+        entry_order: OrderResult,
+        slippage: float,
+    ) -> UUID:
+        """Persist trade and position records to DB."""
+        signal_id = None
+        if hasattr(signal, "id"):
+            signal_id = signal.id
+        elif isinstance(signal, dict):
+            signal_id = signal.get("id")
+
+        trade_id = uuid.uuid4()
+        trade = Trade(
+            id=trade_id,
+            bot_id=bot_id,
+            signal_id=signal_id,
+            symbol=symbol,
+            side=SignalSide.BUY if side in ("BUY", SignalSide.BUY) else SignalSide.SELL,
+            strategy_name=strategy_name,
+            leverage=leverage,
+            entry_price=entry_price,
+            quantity=quantity,
+            remaining_quantity=quantity,
+            sl_price=sl_price,
+            tp1_price=tp_levels.tp1.price,
+            tp2_price=tp_levels.tp2.price,
+            tp3_price=tp_levels.tp3.price,
+            slippage=slippage,
+            status=TradeStatus.OPEN,
+            trade_state=TradeState.ENTRY,
+            binance_order_id=entry_order.order_id,
+            entry_time=datetime.utcnow(),
+        )
+        self.db.add(trade)
+
+        position = Position(
+            trade_id=trade_id,
+            symbol=symbol,
+            side=SignalSide.BUY if side in ("BUY", SignalSide.BUY) else SignalSide.SELL,
+            quantity=quantity,
+            mark_price=entry_price,
+        )
+        self.db.add(position)
+
+        await self.db.commit()
+        logger.info("Trade recorded in DB: id=%s symbol=%s", trade_id, symbol)
+        return trade_id
+
+    # ─────────────────────────────────────────────────────────────
+    #  PRIVATE — UTILITIES
+    # ─────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _parse_order(raw: dict) -> OrderResult:
+        """Parse Binance order response into OrderResult."""
+        return OrderResult(
+            order_id=str(raw.get("orderId", "")),
+            client_order_id=str(raw.get("clientOrderId", "")),
+            symbol=raw.get("symbol", ""),
+            side=raw.get("side", ""),
+            order_type=raw.get("type", ""),
+            status=raw.get("status", ""),
+            price=float(raw.get("price", 0)),
+            avg_price=float(raw.get("avgPrice", 0)),
+            quantity=float(raw.get("origQty", 0)),
+            filled_qty=float(raw.get("executedQty", 0)),
+            raw=raw,
+        )
+
+    @staticmethod
+    def _precision_from_step(step: str) -> int:
+        """Derive decimal precision from a step size string like '0.001'."""
+        step_str = str(step)
+        if "." not in step_str:
+            return 0
+        decimals = step_str.split(".")[-1].rstrip("0")
+        return len(decimals)

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BinBot PRO | Performance Analytics</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <style>
+        .analytics-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+        }
+
+        canvas#equityChart {
+            width: 100%;
+            height: 300px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1.8fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Navigation Container -->
+    <div id="sidebar-container"></div>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Top Status/Metric Header Container -->
+        <div id="header-container"></div>
+
+        <div class="analytics-layout">
+            <!-- Equity curve chart -->
+            <div class="chart-card">
+                <div class="card-title">
+                    Equity Growth Curve (USDT)
+                    <div class="filter-group" style="font-weight: normal; font-size: 0.85rem;">
+                        <span id="equity-range-label" class="badge badge-info">Last 30 Days</span>
+                    </div>
+                </div>
+                <div style="position: relative; width: 100%;">
+                    <canvas id="equityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Strategy & Daily breakdown grid -->
+            <div class="analytics-grid">
+                <!-- Strategy performance breakdown -->
+                <div class="card" style="margin-bottom: 0;">
+                    <div class="card-title">Strategy Efficacy Matrix</div>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Compare win rates and average returns across the 5 core market regime-specific strategies.
+                    </p>
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Strategy</th>
+                                    <th>Trades</th>
+                                    <th>Win Rate</th>
+                                    <th>Total Return</th>
+                                </tr>
+                            </thead>
+                            <tbody id="strategies-table-body">
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                        Loading efficacy metrics...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Daily breakdown -->
+                <div class="card" style="margin-bottom: 0;">
+                    <div class="card-title">Daily Operations Breakdown</div>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Historical logs of daily returns, win rates, and drawdowns.
+                    </p>
+                    <div style="overflow-x: auto; max-height: 380px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>PnL (USDT)</th>
+                                    <th>Return %</th>
+                                    <th>Trades</th>
+                                    <th>Win Rate</th>
+                                    <th>Max Drawdown</th>
+                                </tr>
+                            </thead>
+                            <tbody id="daily-table-body">
+                                <tr>
+                                    <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                        Loading historical breakdown...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Load Socket.IO, app.js, and page-specific JS -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/analytics.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeLayout('analytics');
+        });
+    </script>
+</body>
+</html>

@@ -3,94 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BinBot PRO - Login</title>
+    <title>BinBot PRO | Secure Portal</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
     <style>
-        :root {
-            --bg: #0f172a;
-            --card: #1e293b;
-            --primary: #3b82f6;
-            --text: #f8fafc;
-        }
         body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Inter', sans-serif;
             display: flex;
             align-items: center;
             justify-content: center;
             height: 100vh;
+            background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 800px), 
+                        radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.05), transparent 800px),
+                        #070a13;
             margin: 0;
         }
+        
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            padding: 1rem;
+        }
+        
         .login-card {
-            background: var(--card);
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
             padding: 2.5rem;
-            border-radius: 20px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-            width: 100%;
-            max-width: 400px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .login-header {
             text-align: center;
-            border: 1px solid #334155;
         }
-        h1 { font-size: 1.5rem; margin-bottom: 2rem; }
-        h1 span { color: var(--primary); }
-        .input-group { text-align: left; margin-bottom: 1.5rem; }
-        label { display: block; font-size: 0.8rem; margin-bottom: 8px; color: #94a3b8; }
-        input {
-            width: 100%;
-            padding: 12px;
+        
+        .login-brand {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+        
+        .login-brand span {
+            color: var(--primary);
+            text-shadow: 0 0 15px var(--primary-glow);
+        }
+        
+        .login-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        .error-message {
+            background-color: var(--danger-glow);
+            color: var(--danger);
+            border: 1px solid rgba(244, 63, 94, 0.2);
+            padding: 0.75rem 1rem;
             border-radius: 8px;
-            border: 1px solid #334155;
-            background: #0f172a;
-            color: white;
-            box-sizing: border-box;
+            font-size: 0.85rem;
+            font-weight: 500;
+            display: none;
+            text-align: center;
         }
-        .btn {
-            width: 100%;
-            padding: 12px;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 1rem;
-        }
-        .error { color: #f87171; font-size: 0.8rem; margin-top: 1rem; display: none; }
     </style>
 </head>
 <body>
-    <div class="login-card">
-        <h1>BinBot <span>PRO</span> Login</h1>
-        <div class="input-group">
-            <label>Username</label>
-            <input type="text" id="username" placeholder="admin">
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="login-brand"><span>BinBot</span> PRO</div>
+                <div class="login-subtitle">AI-Powered Futures Trading Console</div>
+            </div>
+            
+            <div id="errorMsg" class="error-message">
+                Invalid credentials. Please try again.
+            </div>
+            
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" placeholder="Enter username" autocomplete="username">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Enter password" autocomplete="current-password">
+            </div>
+            
+            <button class="btn btn-primary" onclick="handleLogin()" style="width: 100%; margin-top: 0.5rem;">
+                Unlock Console
+            </button>
         </div>
-        <div class="input-group">
-            <label>Password</label>
-            <input type="password" id="password" placeholder="••••••••">
-        </div>
-        <button class="btn" onclick="handleLogin()">Unlock Dashboard</button>
-        <div id="errorMsg" class="error">Invalid username or password.</div>
     </div>
 
+    <!-- Include Toast Support -->
+    <script src="/js/app.js"></script>
     <script>
+        // If already logged in, redirect to overview
+        if (localStorage.getItem('binbot_access_token')) {
+            window.location.href = '/dashboard';
+        }
+
         async function handleLogin() {
             const user = document.getElementById('username').value;
             const pass = document.getElementById('password').value;
+            const errorElem = document.getElementById('errorMsg');
             
-            const response = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: user, password: pass })
-            });
+            errorElem.style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, password: pass })
+                });
 
-            if (response.ok) {
-                localStorage.setItem('binbot_logged_in', 'true');
-                window.location.href = '/dashboard/index.html';
-            } else {
-                document.getElementById('errorMsg').style.display = 'block';
+                if (response.ok) {
+                    const data = await response.json();
+                    localStorage.setItem('binbot_access_token', data.access_token);
+                    localStorage.setItem('binbot_refresh_token', data.refresh_token);
+                    window.location.href = '/dashboard';
+                } else {
+                    const errData = await response.json();
+                    errorElem.innerText = errData.detail || "Invalid username or password.";
+                    errorElem.style.display = 'block';
+                }
+            } catch (e) {
+                console.error("Login request failed:", e);
+                errorElem.innerText = "Network error. Failed to connect to server.";
+                errorElem.style.display = 'block';
             }
         }
+
+        // Allow Enter key to trigger login
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                handleLogin();
+            }
+        });
     </script>
 </body>
 </html>
