@@ -103,6 +103,10 @@ class Settings(BaseSettings):
     SUPERTREND_PERIOD: int = 10
     SUPERTREND_MULTIPLIER: float = 3.0
 
+    # ── Trailing Stop / Take Profit ──────────────────────────────
+    TRAILING_STOP_PCT: float = 0.03          # 3% trail distance from peak
+    TRAILING_ACTIVATE_PCT: float = 0.01      # Activate after 1% profit
+
     # ── Data Engine ──────────────────────────────────────────────
     WS_RECONNECT_MAX_DELAY: int = 60         # Max reconnect delay (seconds)
     WS_PING_INTERVAL: int = 30               # Ping every 30s

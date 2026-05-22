@@ -273,11 +273,28 @@ class RiskManager:
         # Binance minimum notional check ($5 USDT for most futures pairs)
         MIN_NOTIONAL = 5.0
         if notional_value < MIN_NOTIONAL:
-            logger.warning(
-                "Notional $%.2f below minimum $%.0f for %s — equity=%.2f entry=%.6f sl_dist=%.6f qty=%.4f",
-                notional_value, MIN_NOTIONAL, symbol, equity, entry_price, sl_distance, quantity,
-            )
-            return PositionSize(quantity=0.0, leverage=1, risk_amount=0.0, risk_pct=0.0)
+            # Small-account fallback: try to size to minimum notional using full buying power
+            target_notional = MIN_NOTIONAL * 2  # $10 target for some buffer
+            fallback_quantity = target_notional / entry_price
+            fallback_margin = target_notional / target_leverage
+
+            if fallback_margin <= max_capital and fallback_quantity > 0:
+                quantity = fallback_quantity
+                notional_value = target_notional
+                required_margin = fallback_margin
+                logger.warning(
+                    "Small-account fallback for %s: sized to $%.0f notional (margin=$%.2f cap=$%.2f)",
+                    symbol, target_notional, fallback_margin, max_capital,
+                )
+            else:
+                logger.warning(
+                    "Notional $%.2f below minimum $%.0f for %s — "
+                    "equity=%.2f entry=%.6f sl_dist=%.6f qty=%.4f margin_needed=%.2f cap=%.2f",
+                    notional_value, MIN_NOTIONAL, symbol,
+                    equity, entry_price, sl_distance, quantity,
+                    fallback_margin, max_capital,
+                )
+                return PositionSize(quantity=0.0, leverage=1, risk_amount=0.0, risk_pct=0.0)
 
         # Apply Binance precision
         quantity = round(quantity, qty_precision)

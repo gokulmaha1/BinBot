@@ -67,6 +67,7 @@ class PositionMonitor:
         self.executor = executor
         self.risk = risk_manager
         self._running: bool = False
+        self._peak_prices: dict[str, float] = {}  # trade_id -> best price seen
 
     async def _log_to_db(self, bot_id: UUID, level: LogLevel, source: LogSource, message: str) -> None:
         """Write a log entry to the database and broadcast to Socket.IO."""
@@ -262,6 +263,9 @@ class PositionMonitor:
             await self._check_tp3(trade, mark_price)
             await self._check_sl(trade, mark_price)
 
+        # Continuous trailing stop (always runs after state checks)
+        await self._check_trailing_sl(trade, mark_price)
+
     # ─────────────────────────────────────────────────────────────
     #  TP / SL CHECKS
     # ─────────────────────────────────────────────────────────────
@@ -362,6 +366,7 @@ class PositionMonitor:
             trade.realized_pnl = pnl
             trade.remaining_quantity = 0.0
             trade.close_reason = "TP3"
+            self._peak_prices.pop(str(trade.id), None)
 
             await self.db.commit()
 
@@ -415,6 +420,7 @@ class PositionMonitor:
             trade.realized_pnl = pnl
             trade.remaining_quantity = 0.0
             trade.close_reason = "SL"
+            self._peak_prices.pop(str(trade.id), None)
 
             await self.db.commit()
 
@@ -428,6 +434,88 @@ class PositionMonitor:
                 LogSource.MONITOR,
                 f"🛑 {prefix}TRADE CLOSED (SL Hit) | {trade.symbol} | Closed @ {mark_price:.4f} (effective SL: {effective_sl:.4f}) | Realized PnL: ${pnl:.2f}"
             )
+
+    async def _check_trailing_sl(self, trade: Trade, mark_price: float) -> None:
+        """
+        Continuously trail the stop-loss behind the best price seen.
+
+        Activates once the trade is past breakeven (TP1_HIT or later).
+        Trails the SL at ``TRAILING_STOP_PCT`` behind the peak price,
+        updating the live Binance order every cycle.
+        """
+        trail_pct = settings.TRAILING_STOP_PCT
+        activate_pct = settings.TRAILING_ACTIVATE_PCT
+        if trail_pct <= 0 or activate_pct <= 0:
+            return
+
+        # Only trail when TP1 has been hit (breakeven or better)
+        if trade.trade_state == TradeState.ENTRY:
+            return
+
+        trade_id_str = str(trade.id)
+        current_peak = self._peak_prices.get(trade_id_str, mark_price)
+        entry_price = trade.entry_price or 0
+        if entry_price <= 0:
+            return
+
+        is_buy = trade.side in ("BUY", SignalSide.BUY)
+        is_sell = trade.side in ("SELL", SignalSide.SELL)
+
+        if is_buy:
+            # Update peak to highest price seen
+            if mark_price > current_peak:
+                current_peak = mark_price
+                self._peak_prices[trade_id_str] = current_peak
+
+            # Don't trail until price has moved up enough from entry
+            if current_peak < entry_price * (1 + activate_pct):
+                return
+
+            # Trail distance from peak
+            trail_sl = current_peak * (1 - trail_pct)
+
+            # Get current effective SL
+            effective_sl = trade.sl_price
+            if trade.trade_state == TradeState.TP1_HIT and trade.entry_price:
+                effective_sl = trade.entry_price
+            elif trade.trade_state in (TradeState.BE_MOVED, TradeState.TP2_HIT) and trade.tp1_price:
+                effective_sl = trade.tp1_price
+
+            if trail_sl > effective_sl:
+                await self.executor.modify_sl(trade.symbol, trail_sl)
+                trade.sl_price = trail_sl
+                await self.db.commit()
+                logger.info(
+                    "Trailing SL for %s: trailed from %.4f to %.4f (peak=%.4f)",
+                    trade.symbol, effective_sl, trail_sl, current_peak,
+                )
+
+        elif is_sell:
+            # Update low to lowest price seen
+            if current_peak == 0 or mark_price < current_peak:
+                current_peak = mark_price
+                self._peak_prices[trade_id_str] = current_peak
+
+            # Don't trail until price has moved down enough from entry
+            if current_peak > entry_price * (1 - activate_pct):
+                return
+
+            trail_sl = current_peak * (1 + trail_pct)
+
+            effective_sl = trade.sl_price
+            if trade.trade_state == TradeState.TP1_HIT and trade.entry_price:
+                effective_sl = trade.entry_price
+            elif trade.trade_state in (TradeState.BE_MOVED, TradeState.TP2_HIT) and trade.tp1_price:
+                effective_sl = trade.tp1_price
+
+            if trail_sl < effective_sl:
+                await self.executor.modify_sl(trade.symbol, trail_sl)
+                trade.sl_price = trail_sl
+                await self.db.commit()
+                logger.info(
+                    "Trailing SL for %s: trailed from %.4f to %.4f (low=%.4f)",
+                    trade.symbol, effective_sl, trail_sl, current_peak,
+                )
 
     # ─────────────────────────────────────────────────────────────
     #  POSITION SYNC
@@ -468,6 +556,7 @@ class PositionMonitor:
                 trade.realized_pnl = pnl
                 trade.remaining_quantity = 0.0
                 trade.close_reason = "sync"
+                self._peak_prices.pop(str(trade.id), None)
 
                 if trade.trade_state == TradeState.ENTRY:
                     trade.trade_state = TradeState.SL_HIT
