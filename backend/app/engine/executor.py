@@ -85,6 +85,7 @@ class TradeExecutor:
         self.db = db_session
         self._exchange_info_cache: Optional[dict] = None
         self._exchange_info_ts: float = 0.0
+        self._last_order_error: str = ""
 
     async def _ensure_client(self) -> None:
         """Ensure the Binance client is initialized if not in paper mode."""
@@ -245,7 +246,8 @@ class TradeExecutor:
             # ── 3. Market entry ──────────────────────────────────
             entry_order = await self._place_market_order(symbol, side, quantity)
             if entry_order is None:
-                return TradeResult(success=False, error=f"Entry order failed for {symbol}")
+                detail = getattr(self, '_last_order_error', '') or ''
+                return TradeResult(success=False, error=f"Entry order failed for {symbol}: {detail}")
 
             entry_price = entry_order.avg_price or entry_order.price
             if entry_price <= 0:
@@ -476,8 +478,10 @@ class TradeExecutor:
         rounded_qty = await self.round_quantity(symbol, quantity)
         if rounded_qty <= 0:
             logger.error("Quantity rounded to 0 for %s (raw_qty=%s) — check balance and precision", symbol, quantity)
+            self._last_order_error = f"Quantity rounded to 0 (raw={quantity}) — check balance/precision"
             return None
 
+        last_error = ""
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 logger.info("[EXEC] Attempt %d: MARKET %s %s qty=%s", attempt, side, symbol, rounded_qty)
@@ -489,9 +493,11 @@ class TradeExecutor:
                 )
                 return self._parse_order(result)
             except Exception as exc:
-                logger.warning("Market order attempt %d failed: %s", attempt, exc)
+                last_error = str(exc)
+                logger.warning("Market order attempt %d failed: %s", attempt, last_error)
                 if attempt < MAX_RETRIES:
                     await asyncio.sleep(RETRY_DELAY_SECONDS)
+        self._last_order_error = last_error
         return None
 
     async def _place_tp_order(
