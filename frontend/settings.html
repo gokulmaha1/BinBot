@@ -70,7 +70,13 @@
                             <span style="font-size: 0.75rem; color: var(--text-muted);">Percentage of wallet used per position margin (1% - 50%).</span>
                         </div>
                         <div class="form-group">
-                            <!-- Placeholder filler -->
+                            <label for="cfg-trading-mode">Active Trading Mode</label>
+                            <select id="cfg-trading-mode">
+                                <option value="paper">Local Paper Trading Simulation</option>
+                                <option value="testnet">Binance Futures Testnet</option>
+                                <option value="live">Binance Futures Live Account</option>
+                            </select>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Current execution environment for the trading engine.</span>
                         </div>
                     </div>
 

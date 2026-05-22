@@ -36,6 +36,9 @@ async function loadConfig() {
             const capInput = document.getElementById('cfg-capital-pct');
             if (capInput) capInput.value = Math.round(config.capital_per_trade_pct * 100);
 
+            const modeSelect = document.getElementById('cfg-trading-mode');
+            if (modeSelect && config.trading_mode) modeSelect.value = config.trading_mode;
+
             const tp1Ratio = document.getElementById('cfg-tp1-ratio');
             const tp1Close = document.getElementById('cfg-tp1-close');
             if (tp1Ratio) tp1Ratio.value = config.tp1_ratio;
@@ -86,6 +89,7 @@ async function saveConfig() {
     
     try {
         const capitalPctInput = document.getElementById('cfg-capital-pct');
+        const modeSelect = document.getElementById('cfg-trading-mode');
         const tp1RatioInput = document.getElementById('cfg-tp1-ratio');
         const tp1CloseInput = document.getElementById('cfg-tp1-close');
         const tp2RatioInput = document.getElementById('cfg-tp2-ratio');
@@ -96,6 +100,7 @@ async function saveConfig() {
         const scanTopInput = document.getElementById('cfg-scan-top');
 
         const capitalPct = parseFloat(capitalPctInput ? capitalPctInput.value : '');
+        const tradingMode = modeSelect ? modeSelect.value : 'paper';
         const tp1Ratio = parseFloat(tp1RatioInput ? tp1RatioInput.value : '');
         const tp1Close = parseFloat(tp1CloseInput ? tp1CloseInput.value : '');
         const tp2Ratio = parseFloat(tp2RatioInput ? tp2RatioInput.value : '');
@@ -130,11 +135,17 @@ async function saveConfig() {
             return;
         }
 
+        if (tradingMode === 'live') {
+            const confirmLive = confirm("⚠️ WARNING: You are switching the active trading mode to LIVE. Real funds will be risked. Are you sure you want to proceed?");
+            if (!confirmLive) return;
+        }
+
         btn.disabled = true;
         btn.innerText = "⏳ Saving...";
 
         const payload = {
             capital_per_trade_pct: capitalPct / 100,
+            trading_mode: tradingMode,
             tp1_ratio: tp1Ratio,
             tp1_close_pct: tp1Close,
             tp2_ratio: tp2Ratio,

@@ -145,8 +145,24 @@ async def get_overview(
     gross_loss = abs(gross_loss_result.scalar() or 0)
     profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else None
 
+    # Fetch live balance dynamically if not in paper mode
+    balance = bot.peak_equity
+    if not settings.is_paper:
+        try:
+            from app.api.bot import _bot_service
+            if _bot_service and _bot_service._executor:
+                balance = await _bot_service._executor.get_balance()
+            else:
+                from app.engine.executor import TradeExecutor
+                executor = TradeExecutor()
+                balance = await executor.get_balance()
+                if executor.client:
+                    await executor.client.close_connection()
+        except Exception as e:
+            logger.error(f"Error fetching dynamic live balance: {e}")
+
     return OverviewStats(
-        balance=bot.peak_equity,
+        balance=balance,
         today_pnl=bot.daily_pnl,
         monthly_pnl=monthly_pnl,
         total_pnl=total_pnl,

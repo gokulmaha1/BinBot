@@ -59,6 +59,7 @@ class BotConfigResponse(BaseModel):
 
 class UpdateConfigRequest(BaseModel):
     capital_per_trade_pct: Optional[float] = None
+    trading_mode: Optional[str] = None
     tp1_ratio: Optional[float] = None
     tp1_close_pct: Optional[float] = None
     tp2_ratio: Optional[float] = None
@@ -136,6 +137,14 @@ async def update_config(
     if req.scanner_top_pairs is not None:
         settings.SCANNER_TOP_PAIRS = max(5, min(50, req.scanner_top_pairs))
         updates["scanner_top_pairs"] = settings.SCANNER_TOP_PAIRS
+
+    if req.trading_mode is not None:
+        try:
+            trading_mode_enum = TradingMode(req.trading_mode)
+            settings.TRADING_MODE = trading_mode_enum
+            updates["trading_mode"] = trading_mode_enum.value
+        except ValueError:
+            raise HTTPException(400, f"Invalid trading mode: {req.trading_mode}")
 
     # TP tiers
     for field in ["tp1_ratio", "tp1_close_pct", "tp2_ratio", "tp2_close_pct", "tp3_ratio", "tp3_close_pct"]:
