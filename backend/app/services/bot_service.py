@@ -230,14 +230,27 @@ class BotService:
                     ranked_pairs = await self._scanner.scan()
 
                     if not ranked_pairs:
+                        await self._log_to_db(
+                            LogLevel.INFO, LogSource.SCANNER, "🔍 Scanner found 0 candidate pairs."
+                        )
                         await asyncio.sleep(settings.SCANNER_INTERVAL_SECONDS)
                         continue
+
+                    top_symbols = [p["symbol"] for p in ranked_pairs[:5]]
+                    symbols_str = ", ".join(top_symbols)
+                    suffix = "..." if len(ranked_pairs) > 5 else ""
+                    await self._log_to_db(
+                        LogLevel.INFO, LogSource.SCANNER,
+                        f"🔍 Scanner found {len(ranked_pairs)} candidate pairs. Analyzing top symbols: {symbols_str}{suffix}"
+                    )
 
                     from app.api.websocket import broadcast_scanner
                     await broadcast_scanner(ranked_pairs)
 
                     # ── STEP 2-6: ANALYZE each pair ──────────────
                     all_opportunities = []
+                    no_features_pairs = []
+                    no_signals_pairs = []
 
                     for pair_info in ranked_pairs:
                         symbol = pair_info["symbol"]
@@ -246,6 +259,7 @@ class BotService:
                             # Step 2: Extract features
                             features = await self._features.extract(symbol)
                             if features is None:
+                                no_features_pairs.append(symbol)
                                 continue
 
                             # Step 3: Detect regime
@@ -254,6 +268,7 @@ class BotService:
                             # Step 4: Run strategies
                             signals = self._strategies.evaluate(features, regime)
                             if not signals:
+                                no_signals_pairs.append(f"{symbol} ({regime.regime})")
                                 continue
 
                             # Step 5: Score signals
@@ -269,6 +284,10 @@ class BotService:
                                         reason=f"Score {scored.total_score} < {settings.SIGNAL_SCORE_THRESHOLD}",
                                         regime=regime.regime,
                                     )
+                                    await self._log_to_db(
+                                        LogLevel.WARNING, LogSource.STRATEGY,
+                                        f"⚠️ {symbol} ({regime.regime}) Strategy {signal.strategy_name} rejected: Score {scored.total_score} < threshold {settings.SIGNAL_SCORE_THRESHOLD}"
+                                    )
                                     continue
 
                                 # Step 6: ML confirmation
@@ -282,9 +301,18 @@ class BotService:
                                         reason=f"ML confidence {ml_result.probability:.1%} < {settings.ML_CONFIDENCE_THRESHOLD:.0%}",
                                         regime=regime.regime,
                                     )
+                                    await self._log_to_db(
+                                        LogLevel.WARNING, LogSource.ML,
+                                        f"🤖 {symbol} ({regime.regime}) Strategy {signal.strategy_name} rejected: ML confidence {ml_result.probability:.1%} < threshold {settings.ML_CONFIDENCE_THRESHOLD:.0%}"
+                                    )
                                     continue
 
                                 # Signal passed all checks!
+                                await self._log_to_db(
+                                    LogLevel.INFO, LogSource.STRATEGY,
+                                    f"✅ {symbol} ({regime.regime}) Strategy {signal.strategy_name} ACCEPTED! Score: {scored.total_score}, ML: {ml_result.probability:.1%}"
+                                )
+
                                 all_opportunities.append({
                                     "symbol": symbol,
                                     "signal": signal,
@@ -297,6 +325,18 @@ class BotService:
                         except Exception as e:
                             logger.error(f"Error analyzing {symbol}: {e}")
                             continue
+
+                    # Log silent skips in summary
+                    if no_features_pairs:
+                        await self._log_to_db(
+                            LogLevel.INFO, LogSource.DATA,
+                            f"ℹ️ Silent skip (no features extracted): {', '.join(no_features_pairs)}"
+                        )
+                    if no_signals_pairs:
+                        await self._log_to_db(
+                            LogLevel.INFO, LogSource.STRATEGY,
+                            f"ℹ️ Silent skip (no strategy signals): {', '.join(no_signals_pairs)}"
+                        )
 
                     # ── STEP 7: RANK & SELECT best opportunities ─
                     if not all_opportunities:

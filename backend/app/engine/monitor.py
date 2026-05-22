@@ -29,6 +29,9 @@ from app.models import (
     TradeStatus,
     TradeState,
     SignalSide,
+    Log,
+    LogLevel,
+    LogSource,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,6 +67,39 @@ class PositionMonitor:
         self.executor = executor
         self.risk = risk_manager
         self._running: bool = False
+
+    async def _log_to_db(self, bot_id: UUID, level: LogLevel, source: LogSource, message: str) -> None:
+        """Write a log entry to the database and broadcast to Socket.IO."""
+        try:
+            if self.db is not None:
+                log = Log(
+                    bot_id=bot_id,
+                    level=level,
+                    source=source,
+                    message=message,
+                )
+                self.db.add(log)
+                await self.db.commit()
+            else:
+                from app.db.session import async_session_factory
+                async with async_session_factory() as session:
+                    log = Log(
+                        bot_id=bot_id,
+                        level=level,
+                        source=source,
+                        message=message,
+                    )
+                    session.add(log)
+                    await session.commit()
+        except Exception as e:
+            logger.error("Failed to write monitor log to DB: %s", e)
+
+        # Also broadcast to dashboard
+        try:
+            from app.api.websocket import broadcast_log
+            await broadcast_log(level.value, source.value, message)
+        except Exception as e:
+            logger.error("Failed to broadcast monitor log: %s", e)
 
     async def check_positions(
         self,
@@ -253,6 +289,13 @@ class PositionMonitor:
                 "Trade %s → TP1_HIT | SL moved to BE (%.4f) | remaining_qty=%.4f",
                 trade.id, trade.entry_price, trade.remaining_quantity,
             )
+            prefix = "[PAPER] " if settings.is_paper else ""
+            await self._log_to_db(
+                trade.bot_id,
+                LogLevel.TRADE,
+                LogSource.MONITOR,
+                f"🎯 {prefix}TP1 HIT | {trade.symbol} | Closed {settings.TP1_CLOSE_PCT * 100:.0f}% ({tp1_qty}) @ {mark_price:.4f} | SL moved to Breakeven ({trade.entry_price:.4f})"
+            )
 
     async def _check_tp2(self, trade: Trade, mark_price: float) -> None:
         """Check if TP2 has been hit → trail SL to TP1 level."""
@@ -280,6 +323,13 @@ class PositionMonitor:
             logger.info(
                 "Trade %s → TP2_HIT | SL trailed to TP1 (%.4f) | remaining_qty=%.4f",
                 trade.id, trade.tp1_price, trade.remaining_quantity,
+            )
+            prefix = "[PAPER] " if settings.is_paper else ""
+            await self._log_to_db(
+                trade.bot_id,
+                LogLevel.TRADE,
+                LogSource.MONITOR,
+                f"🎯 {prefix}TP2 HIT | {trade.symbol} | Closed {settings.TP2_CLOSE_PCT * 100:.0f}% ({tp2_qty}) @ {mark_price:.4f} | SL trailed to TP1 ({trade.tp1_price:.4f})"
             )
 
     async def _check_tp3(self, trade: Trade, mark_price: float) -> None:
@@ -315,6 +365,13 @@ class PositionMonitor:
             await self.risk.update_daily_stats(trade.bot_id, pnl)
 
             logger.info("Trade %s CLOSED via TP3 | PnL=%.2f", trade.id, pnl)
+            prefix = "[PAPER] " if settings.is_paper else ""
+            await self._log_to_db(
+                trade.bot_id,
+                LogLevel.TRADE,
+                LogSource.MONITOR,
+                f"💰 {prefix}TRADE CLOSED (TP3 Hit) | {trade.symbol} | Remaining closed @ {mark_price:.4f} | Realized PnL: ${pnl:.2f}"
+            )
 
     async def _check_sl(self, trade: Trade, mark_price: float) -> None:
         """Check if SL has been hit → close and record loss."""
@@ -360,6 +417,13 @@ class PositionMonitor:
             await self.risk.update_daily_stats(trade.bot_id, pnl)
 
             logger.info("Trade %s CLOSED via SL | PnL=%.2f", trade.id, pnl)
+            prefix = "[PAPER] " if settings.is_paper else ""
+            await self._log_to_db(
+                trade.bot_id,
+                LogLevel.TRADE,
+                LogSource.MONITOR,
+                f"🛑 {prefix}TRADE CLOSED (SL Hit) | {trade.symbol} | Closed @ {mark_price:.4f} (effective SL: {effective_sl:.4f}) | Realized PnL: ${pnl:.2f}"
+            )
 
     # ─────────────────────────────────────────────────────────────
     #  POSITION SYNC
@@ -410,6 +474,13 @@ class PositionMonitor:
                 await self.db.commit()
                 await self.risk.update_daily_stats(trade.bot_id, pnl)
                 logger.info("Synced trade %s as closed | PnL=%.2f", trade.id, pnl)
+                prefix = "[PAPER] " if settings.is_paper else ""
+                await self._log_to_db(
+                    bot_id,
+                    LogLevel.WARNING,
+                    LogSource.MONITOR,
+                    f"⚠️ {prefix}POSITION SYNC | {trade.symbol} was closed on Binance (likely SL/TP fill) | Synced DB to CLOSED @ {exit_price:.4f} | Realized PnL: ${pnl:.2f}"
+                )
 
     # ─────────────────────────────────────────────────────────────
     #  PRIVATE HELPERS
