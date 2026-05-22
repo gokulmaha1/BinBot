@@ -1,7 +1,53 @@
+let activeChips = [];
+
 /**
- * BinBot PRO - Settings Page Script
- * Handles loading config parameters, updating parameters, and linking Binance exchange accounts.
+ * Helper to parse, validate and add symbols to activeChips
  */
+function addSymbolsFromInput(value) {
+    if (!value) return;
+    const symbols = value.split(/[\s,]+/).map(s => s.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(s => s.length > 0);
+    let added = false;
+    symbols.forEach(sym => {
+        if (!activeChips.includes(sym)) {
+            activeChips.push(sym);
+            added = true;
+        }
+    });
+    if (added) {
+        renderChips();
+    }
+}
+
+/**
+ * Render active chips inside the chips container
+ */
+function renderChips() {
+    const container = document.getElementById('chips-container');
+    if (!container) return;
+    
+    // Remove existing chip elements
+    const existingChips = container.querySelectorAll('.chip');
+    existingChips.forEach(c => c.remove());
+    
+    const input = document.getElementById('cfg-manual-pairs-input');
+    
+    // Create and prepend new chips
+    activeChips.forEach(symbol => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.innerHTML = `
+            <span>${symbol}</span>
+            <span class="chip-remove" onclick="removeChip('${symbol}')">&times;</span>
+        `;
+        container.insertBefore(chip, input);
+    });
+}
+
+// Make removeChip global so inline onclick can access it
+window.removeChip = function(symbol) {
+    activeChips = activeChips.filter(s => s !== symbol);
+    renderChips();
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Fetch and render bot configuration
@@ -20,6 +66,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnAddExchange = document.getElementById('btn-add-exchange');
     if (btnAddExchange) {
         btnAddExchange.addEventListener('click', addExchangeAccount);
+    }
+
+    // 5. Initialize Chips Input Listeners
+    const container = document.getElementById('chips-container');
+    const input = document.getElementById('cfg-manual-pairs-input');
+    if (container && input) {
+        container.addEventListener('click', (e) => {
+            if (e.target === container || e.target.classList.contains('chips-container')) {
+                input.focus();
+            }
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                addSymbolsFromInput(input.value);
+                input.value = '';
+            } else if (e.key === 'Backspace' && input.value === '' && activeChips.length > 0) {
+                activeChips.pop();
+                renderChips();
+            }
+        });
+
+        input.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const text = (e.clipboardData || window.clipboardData).getData('text');
+            addSymbolsFromInput(text);
+        });
+
+        input.addEventListener('blur', () => {
+            addSymbolsFromInput(input.value);
+            input.value = '';
+        });
     }
 });
 
@@ -58,6 +137,13 @@ async function loadConfig() {
             const scanTop = document.getElementById('cfg-scan-top');
             if (scanVolume) scanVolume.value = config.scanner_min_volume_24h;
             if (scanTop) scanTop.value = config.scanner_top_pairs;
+
+            if (config.scanner_manual_pairs) {
+                activeChips = config.scanner_manual_pairs.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0);
+            } else {
+                activeChips = [];
+            }
+            renderChips();
 
             // Populate Read-Only Hard Limits
             const roMaxLev = document.getElementById('ro-max-lev');
@@ -153,7 +239,8 @@ async function saveConfig() {
             tp3_ratio: tp3Ratio,
             tp3_close_pct: tp3Close / 100,
             scanner_min_volume_24h: scanVolume,
-            scanner_top_pairs: scanTop
+            scanner_top_pairs: scanTop,
+            scanner_manual_pairs: activeChips.join(',')
         };
 
         const res = await apiFetch('/api/config', {

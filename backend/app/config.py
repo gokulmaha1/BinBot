@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     SCANNER_MAX_SPREAD_PCT: float = 0.001           # 0.1%
     SCANNER_MIN_LISTING_DAYS: int = 30
     SCANNER_TOP_PAIRS: int = 20
+    SCANNER_MANUAL_PAIRS: str = ""
 
     # ── Take Profit Tiers ────────────────────────────────────────
     TP1_RATIO: float = 1.0    # 1:1 R:R

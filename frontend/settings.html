@@ -44,6 +44,58 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        /* Chips Input Styles */
+        .chips-container {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+            background-color: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.5rem;
+            min-height: 42px;
+            cursor: text;
+        }
+
+        .chips-container:focus-within {
+            border-color: var(--primary);
+        }
+
+        .chip {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            background-color: var(--primary-glow);
+            color: var(--primary);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 6px;
+            padding: 0.2rem 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            user-select: none;
+        }
+
+        .chip-remove {
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            font-size: 0.75rem;
+            line-height: 1;
+            color: var(--primary);
+            transition: background-color 0.15s, color 0.15s;
+        }
+
+        .chip-remove:hover {
+            background-color: var(--primary);
+            color: var(--bg-main);
+        }
     </style>
 </head>
 <body>
@@ -131,6 +183,14 @@
                         <div class="form-group">
                             <label for="cfg-scan-top">Ranked Pairs Limit</label>
                             <input type="number" id="cfg-scan-top" min="5" max="50" placeholder="e.g. 20">
+                        </div>
+                        <div class="form-group" style="grid-column: span 2;">
+                            <label>Manual Pairs Override (Optional)</label>
+                            <div class="chips-container" id="chips-container">
+                                <!-- Chips will be dynamically rendered here -->
+                                <input type="text" id="cfg-manual-pairs-input" placeholder="Type symbol and press Enter (e.g. BTCUSDT)..." style="border: none !important; outline: none !important; background: transparent !important; color: inherit !important; flex-grow: 1; min-width: 150px; padding: 0.25rem 0; box-shadow: none !important; height: auto !important; margin: 0 !important;">
+                            </div>
+                            <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem; display: block;">Specify trading symbols directly (e.g. BTCUSDT, ETHUSDT). Press Enter or Comma to add. Bypasses standard scan filters.</span>
                         </div>
                     </div>
 

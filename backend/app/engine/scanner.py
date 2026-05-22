@@ -163,9 +163,10 @@ class PairScanner:
 
         # ── Step 1: Fetch raw data ───────────────────────────────
         try:
-            exchange_info, tickers_24h = await asyncio.gather(
+            exchange_info, tickers_24h, book_tickers = await asyncio.gather(
                 self._binance_client.futures_exchange_info(),
                 self._binance_client.futures_ticker(),
+                self._binance_client.futures_orderbook_ticker(),
             )
         except Exception as exc:
             logger.error("Failed to fetch market data: %s", exc)
@@ -179,15 +180,30 @@ class PairScanner:
         for t in tickers_24h:
             sym = t.get("symbol", "")
             if sym:
-                ticker_map[sym] = t
+                ticker_map[sym] = t.copy()
 
-        # ── Step 2: Hard filter ──────────────────────────────────
-        candidates = self._apply_hard_filters(symbol_info, ticker_map)
+        for bt in book_tickers:
+            sym = bt.get("symbol", "")
+            if sym and sym in ticker_map:
+                ticker_map[sym]["askPrice"] = bt.get("askPrice", "0")
+                ticker_map[sym]["bidPrice"] = bt.get("bidPrice", "0")
+
+        # ── Step 2: Hard filter or Manual Override ───────────────
+        manual_pairs_list = [s.strip().upper() for s in settings.SCANNER_MANUAL_PAIRS.split(",") if s.strip()]
+        if manual_pairs_list:
+            candidates = []
+            for sym in manual_pairs_list:
+                if sym in symbol_info and sym in ticker_map:
+                    candidates.append(sym)
+            logger.info("Using manual candidates (bypassing filters): %s", candidates)
+        else:
+            candidates = self._apply_hard_filters(symbol_info, ticker_map)
+
         if not candidates:
-            logger.warning("No candidates passed hard filters")
+            logger.warning("No candidates available for scanning")
             return []
 
-        logger.debug("%d candidates passed hard filters", len(candidates))
+        logger.debug("%d candidates passed filters", len(candidates))
 
         # ── Step 3: Fetch klines + OI for scoring ────────────────
         scored_pairs = await self._score_candidates(candidates, ticker_map)

@@ -48,6 +48,7 @@ class BotConfigResponse(BaseModel):
     # Scanner
     scanner_min_volume_24h: float
     scanner_top_pairs: int
+    scanner_manual_pairs: str
 
     # Indicators
     ema_fast: int
@@ -68,6 +69,7 @@ class UpdateConfigRequest(BaseModel):
     tp3_close_pct: Optional[float] = None
     scanner_min_volume_24h: Optional[float] = None
     scanner_top_pairs: Optional[int] = None
+    scanner_manual_pairs: Optional[str] = None
 
 
 class ExchangeAccountRequest(BaseModel):
@@ -108,6 +110,7 @@ async def get_config(current_user: dict = Depends(get_current_user)):
         tp3_close_pct=settings.TP3_CLOSE_PCT,
         scanner_min_volume_24h=settings.SCANNER_MIN_VOLUME_24H,
         scanner_top_pairs=settings.SCANNER_TOP_PAIRS,
+        scanner_manual_pairs=settings.SCANNER_MANUAL_PAIRS,
         ema_fast=settings.EMA_FAST,
         ema_mid=settings.EMA_MID,
         ema_slow=settings.EMA_SLOW,
@@ -137,6 +140,11 @@ async def update_config(
     if req.scanner_top_pairs is not None:
         settings.SCANNER_TOP_PAIRS = max(5, min(50, req.scanner_top_pairs))
         updates["scanner_top_pairs"] = settings.SCANNER_TOP_PAIRS
+
+    if req.scanner_manual_pairs is not None:
+        cleaned = ",".join([s.strip().upper() for s in req.scanner_manual_pairs.split(",") if s.strip()])
+        settings.SCANNER_MANUAL_PAIRS = cleaned
+        updates["scanner_manual_pairs"] = cleaned
 
     if req.trading_mode is not None:
         try:

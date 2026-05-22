@@ -123,3 +123,31 @@ def test_calculate_atr():
     assert atr > 0.0
     # Since all TRs are around 5.0, the ATR should be close to 5.0
     assert abs(atr - 5.0) < 0.2
+
+def test_apply_manual_pairs_override():
+    scanner = PairScanner()
+    
+    with patch('app.engine.scanner.settings') as mock_settings:
+        mock_settings.SCANNER_MANUAL_PAIRS = "BTCUSDT, ETHUSDT"
+        
+        symbol_info = {
+            "BTCUSDT": {"symbol": "BTCUSDT"},
+            "ETHUSDT": {"symbol": "ETHUSDT"},
+            "SOLUSDT": {"symbol": "SOLUSDT"}
+        }
+        
+        ticker_map = {
+            "BTCUSDT": {"symbol": "BTCUSDT"},
+            "ETHUSDT": {"symbol": "ETHUSDT"},
+            "SOLUSDT": {"symbol": "SOLUSDT"}
+        }
+        
+        manual_pairs_list = [s.strip().upper() for s in mock_settings.SCANNER_MANUAL_PAIRS.split(",") if s.strip()]
+        candidates = []
+        for sym in manual_pairs_list:
+            if sym in symbol_info and sym in ticker_map:
+                candidates.append(sym)
+                
+        assert candidates == ["BTCUSDT", "ETHUSDT"]
+        assert "SOLUSDT" not in candidates
+

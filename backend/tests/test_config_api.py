@@ -33,3 +33,27 @@ async def test_update_config_trading_mode():
     finally:
         # Restore original configuration
         settings.TRADING_MODE = original_mode
+
+@pytest.mark.asyncio
+async def test_update_config_manual_pairs():
+    original_pairs = settings.SCANNER_MANUAL_PAIRS
+
+    try:
+        # 1. Update with manual pairs
+        req = UpdateConfigRequest(scanner_manual_pairs="btcUsdt, ethusdt, solusdt")
+        res = await update_config(req=req, current_user={"user_id": "12345678-1234-5678-1234-567812345678"})
+        assert res["success"] is True
+        assert res["updated"]["scanner_manual_pairs"] == "BTCUSDT,ETHUSDT,SOLUSDT"
+        assert settings.SCANNER_MANUAL_PAIRS == "BTCUSDT,ETHUSDT,SOLUSDT"
+
+        # 2. Update with empty string/None
+        req = UpdateConfigRequest(scanner_manual_pairs="")
+        res = await update_config(req=req, current_user={"user_id": "12345678-1234-5678-1234-567812345678"})
+        assert res["success"] is True
+        assert res["updated"]["scanner_manual_pairs"] == ""
+        assert settings.SCANNER_MANUAL_PAIRS == ""
+
+    finally:
+        # Restore original config
+        settings.SCANNER_MANUAL_PAIRS = original_pairs
+
