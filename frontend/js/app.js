@@ -285,10 +285,10 @@ async function updateHeaderStats() {
             const pnlElem = document.getElementById('hdr-daily-pnl');
             const activeElem = document.getElementById('hdr-active-trades');
             
-            if (balanceElem) balanceElem.innerText = `$${stats.wallet_balance.toFixed(2)}`;
+            if (balanceElem) balanceElem.innerText = `$${stats.balance.toFixed(2)}`;
             if (pnlElem) {
-                pnlElem.innerText = `${stats.daily_pnl >= 0 ? '+' : ''}$${stats.daily_pnl.toFixed(2)}`;
-                pnlElem.className = `metric-value ${stats.daily_pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
+                pnlElem.innerText = `${stats.today_pnl >= 0 ? '+' : ''}$${stats.today_pnl.toFixed(2)}`;
+                pnlElem.className = `metric-value ${stats.today_pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
             }
             if (activeElem) activeElem.innerText = `${stats.active_positions} / 3`;
         }
