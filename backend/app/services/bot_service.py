@@ -361,7 +361,7 @@ class BotService:
                                     continue
 
                                 # Step 6: ML confirmation
-                                ml_result = self._ml.predict(scored.to_features_dict())
+                                ml_result = await self._ml.predict(scored.to_features_dict(features, regime))
 
                                 if ml_result.probability < settings.ML_CONFIDENCE_THRESHOLD:
                                     await self._record_signal(

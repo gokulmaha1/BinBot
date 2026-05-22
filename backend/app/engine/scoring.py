@@ -36,6 +36,39 @@ class ScoredSignal:
     breakdown: dict[str, float] = field(default_factory=dict)  # factor → score (0–100 each)
     threshold: int = settings.SIGNAL_SCORE_THRESHOLD
 
+    def to_features_dict(self, features: FeatureSet, regime: RegimeResult) -> dict:
+        """Build ML-ready feature dict from FeatureSet + signal data."""
+        close = features.close
+        ema_fast = features.ema_fast or 1e-10
+        ema_mid = features.ema_mid or 1e-10
+        ema_slow = features.ema_slow or 1e-10
+        ema_trend = features.ema_trend or 1e-10
+        hl_range = max(features.high - features.low, 1e-10)
+        body = features.close - features.open
+
+        return {
+            "rsi": features.rsi,
+            "ema_fast_dist": (close - ema_fast) / ema_fast,
+            "ema_mid_dist": (close - ema_mid) / ema_mid,
+            "ema_slow_dist": (close - ema_slow) / ema_slow,
+            "ema_trend_dist": (close - ema_trend) / ema_trend,
+            "macd_hist": features.macd_histogram,
+            "macd_hist_slope": 0.0,
+            "adx": features.adx,
+            "bb_position": features.bb_percent_b,
+            "atr_pct": features.atr / close if close > 0 else 0.0,
+            "volume_sma_ratio": features.volume_spike_ratio,
+            "volume_spike": features.volume_spike_ratio,
+            "oi_change_pct": 0.0,
+            "funding_rate": 0.0,
+            "ob_imbalance": 0.5,
+            "wick_rejection_ratio": (features.high - max(features.open, close)) / hl_range,
+            "body_ratio": abs(body) / hl_range,
+            "consecutive_candle_dir": 0,
+            "higher_tf_alignment": 0.0,
+            "regime_score": regime.confidence,
+        }
+
 
 class SignalScorer:
     """Computes a weighted 0-100 score for a strategy signal."""
@@ -60,7 +93,7 @@ class SignalScorer:
         ScoredSignal
         """
         trend_score = self._score_trend(signal, features, regime)
-        momentum_score = self._score_momentum(signal, features)
+        momentum_score = self._score_momentum(signal, features, regime)
         volume_score = self._score_volume(signal, features)
         volatility_score = self._score_volatility(features, regime)
         structure_score = self._score_structure(signal, features)
@@ -159,23 +192,31 @@ class SignalScorer:
     # ── Factor 2: Momentum (20%) ─────────────────────────────────
 
     @staticmethod
-    def _score_momentum(signal: StrategySignal, f: FeatureSet) -> float:
+    def _score_momentum(signal: StrategySignal, f: FeatureSet, regime: RegimeResult) -> float:
         """
         Score 0-100 based on RSI, MACD, and Stochastic RSI alignment.
+        Regime-aware: trending markets tolerate higher RSI.
         """
         score = 0.0
         is_buy = signal.side == "BUY"
+        is_trending = regime.regime in (
+            MarketRegime.TRENDING_BULLISH.value,
+            MarketRegime.TRENDING_BEARISH.value,
+            MarketRegime.BREAKOUT.value,
+        )
 
-        # RSI (up to 35 points)
+        # RSI (up to 35 points) — regime-aware
         if is_buy:
             if 40 <= f.rsi <= 65:
-                score += 35  # ideal buy zone
+                score += 35
             elif 30 <= f.rsi < 40:
-                score += 25  # still okay
+                score += 25
             elif f.rsi < 30:
-                score += 15  # oversold — risky for trend, good for reversion
-            elif 65 < f.rsi <= 75:
-                score += 10  # strong momentum, but getting high
+                score += 15
+            elif 65 < f.rsi <= 80:
+                score += 25 if is_trending else 10
+            elif f.rsi > 80:
+                score += 15 if is_trending else 5
         else:
             if 35 <= f.rsi <= 60:
                 score += 35
