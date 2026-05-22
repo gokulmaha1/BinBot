@@ -42,17 +42,17 @@ async function loadConfig() {
             const tp1Ratio = document.getElementById('cfg-tp1-ratio');
             const tp1Close = document.getElementById('cfg-tp1-close');
             if (tp1Ratio) tp1Ratio.value = config.tp1_ratio;
-            if (tp1Close) tp1Close.value = config.tp1_close_pct;
+            if (tp1Close) tp1Close.value = Math.round(config.tp1_close_pct * 100);
 
             const tp2Ratio = document.getElementById('cfg-tp2-ratio');
             const tp2Close = document.getElementById('cfg-tp2-close');
             if (tp2Ratio) tp2Ratio.value = config.tp2_ratio;
-            if (tp2Close) tp2Close.value = config.tp2_close_pct;
+            if (tp2Close) tp2Close.value = Math.round(config.tp2_close_pct * 100);
 
             const tp3Ratio = document.getElementById('cfg-tp3-ratio');
             const tp3Close = document.getElementById('cfg-tp3-close');
             if (tp3Ratio) tp3Ratio.value = config.tp3_ratio;
-            if (tp3Close) tp3Close.value = config.tp3_close_pct;
+            if (tp3Close) tp3Close.value = Math.round(config.tp3_close_pct * 100);
 
             const scanVolume = document.getElementById('cfg-scan-volume');
             const scanTop = document.getElementById('cfg-scan-top');
@@ -147,11 +147,11 @@ async function saveConfig() {
             capital_per_trade_pct: capitalPct / 100,
             trading_mode: tradingMode,
             tp1_ratio: tp1Ratio,
-            tp1_close_pct: tp1Close,
+            tp1_close_pct: tp1Close / 100,
             tp2_ratio: tp2Ratio,
-            tp2_close_pct: tp2Close,
+            tp2_close_pct: tp2Close / 100,
             tp3_ratio: tp3Ratio,
-            tp3_close_pct: tp3Close,
+            tp3_close_pct: tp3Close / 100,
             scanner_min_volume_24h: scanVolume,
             scanner_top_pairs: scanTop
         };
