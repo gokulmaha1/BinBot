@@ -323,10 +323,15 @@ class BotService:
 
                             # Step 3: Detect regime
                             regime = self._regime.detect(features)
+                            ema_stack = (
+                                "BULL" if features.ema_fast > features.ema_mid > features.ema_slow > features.ema_trend else
+                                "BEAR" if features.ema_fast < features.ema_mid < features.ema_slow < features.ema_trend else
+                                "MIXED"
+                            )
                             await self._log_to_db(
                                 LogLevel.INFO, LogSource.DATA,
-                                f"📊 {symbol}: Regime={regime.regime} | RSI={getattr(features, 'rsi', 'N/A')} | "
-                                f"ADX={getattr(features, 'adx', 'N/A')} | EMA_stack={getattr(features, 'ema_bullish', 'N/A')}"
+                                f"📊 {symbol}: Regime={regime.regime} | RSI={features.rsi:.1f} | "
+                                f"ADX={features.adx:.1f} | EMA_stack={ema_stack}"
                             )
 
                             # Step 4: Run strategies
