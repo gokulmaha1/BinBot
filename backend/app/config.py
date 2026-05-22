@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     CAPITAL_PER_TRADE_PCT: float = 0.20      # 20% of wallet per trade
 
     # ── Signal Thresholds ────────────────────────────────────────
-    SIGNAL_SCORE_THRESHOLD: int = 60         # Minimum signal score (0-100)
+    SIGNAL_SCORE_THRESHOLD: int = 55         # Minimum signal score (0-100)
     ML_CONFIDENCE_THRESHOLD: float = 0.75    # Minimum ML confirmation (0-1)
 
     # ── Scanner Settings ─────────────────────────────────────────
