@@ -199,6 +199,26 @@ class BotService:
         """
         logger.info("Entering main trading loop...")
 
+        # Log active config on startup so user can see all parameters
+        await self._log_to_db(
+            LogLevel.INFO, LogSource.SCANNER,
+            f"⚙️ CONFIG: Mode={settings.TRADING_MODE.value} | "
+            f"SignalThreshold={settings.SIGNAL_SCORE_THRESHOLD} | "
+            f"MLThreshold={settings.ML_CONFIDENCE_THRESHOLD:.0%} | "
+            f"RiskPerTrade={settings.MAX_RISK_PER_TRADE:.0%} | "
+            f"CapitalPerTrade={settings.CAPITAL_PER_TRADE_PCT:.0%} | "
+            f"MaxPositions={settings.MAX_ACTIVE_POSITIONS} | "
+            f"MaxTrades/Day={settings.MAX_TRADES_PER_DAY}"
+        )
+        await self._log_to_db(
+            LogLevel.INFO, LogSource.SCANNER,
+            f"⚙️ TP TIERS: TP1={settings.TP1_RATIO}R close {settings.TP1_CLOSE_PCT:.0%} | "
+            f"TP2={settings.TP2_RATIO}R close {settings.TP2_CLOSE_PCT:.0%} | "
+            f"TP3={settings.TP3_RATIO}R close {settings.TP3_CLOSE_PCT:.0%} | "
+            f"ScanInterval={settings.SCANNER_INTERVAL_SECONDS}s | "
+            f"ManualPairs={settings.SCANNER_MANUAL_PAIRS or 'auto'}"
+        )
+
         while self._running:
             try:
                 async with async_session_factory() as session:
@@ -303,12 +323,23 @@ class BotService:
 
                             # Step 3: Detect regime
                             regime = self._regime.detect(features)
+                            await self._log_to_db(
+                                LogLevel.INFO, LogSource.DATA,
+                                f"📊 {symbol}: Regime={regime.regime} | RSI={getattr(features, 'rsi', 'N/A')} | "
+                                f"ADX={getattr(features, 'adx', 'N/A')} | EMA_stack={getattr(features, 'ema_bullish', 'N/A')}"
+                            )
 
                             # Step 4: Run strategies
                             signals = self._strategies.evaluate(features, regime)
                             if not signals:
                                 no_signals_pairs.append(f"{symbol} ({regime.regime})")
                                 continue
+
+                            await self._log_to_db(
+                                LogLevel.INFO, LogSource.STRATEGY,
+                                f"📡 {symbol}: {len(signals)} signal(s) generated — "
+                                + ", ".join([f"{s.strategy_name} {s.side.value}" for s in signals])
+                            )
 
                             # Step 5: Score signals
                             for signal in signals:
@@ -377,6 +408,17 @@ class BotService:
                             f"ℹ️ Silent skip (no strategy signals): {', '.join(no_signals_pairs)}"
                         )
 
+                    # Log cycle summary funnel
+                    total_scored = len(all_opportunities)
+                    total_rejected_score = sum(1 for _ in no_signals_pairs)  # approximate
+                    await self._log_to_db(
+                        LogLevel.INFO, LogSource.SCANNER,
+                        f"📈 CYCLE SUMMARY: {len(ranked_pairs)} scanned → "
+                        f"{len(ranked_pairs) - len(no_features_pairs)} features → "
+                        f"{len(ranked_pairs) - len(no_features_pairs) - len(no_signals_pairs)} signals → "
+                        f"{total_scored} opportunities passed all checks"
+                    )
+
                     # ── STEP 7: RANK & SELECT best opportunities ─
                     if not all_opportunities:
                         await asyncio.sleep(settings.SCANNER_INTERVAL_SECONDS)
@@ -402,7 +444,10 @@ class BotService:
                             # Get current active position count
                             active_count = await self._get_active_position_count(session, bot.id)
                             if active_count >= settings.MAX_ACTIVE_POSITIONS:
-                                logger.info(f"Max positions ({settings.MAX_ACTIVE_POSITIONS}) reached. Skipping.")
+                                await self._log_to_db(
+                                    LogLevel.WARNING, LogSource.RISK,
+                                    f"🚫 Max positions reached ({active_count}/{settings.MAX_ACTIVE_POSITIONS}). Skipping remaining opportunities."
+                                )
                                 break
 
                             # Risk check
