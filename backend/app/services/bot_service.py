@@ -297,7 +297,7 @@ class BotService:
                             try:
                                 klines_raw = await self._scanner._binance_client.futures_klines(
                                     symbol=symbol,
-                                    interval="1h",
+                                    interval="15m",
                                     limit=200,
                                 )
                                 if len(klines_raw) < 50:

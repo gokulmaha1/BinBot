@@ -365,11 +365,11 @@ class PairScanner:
             return None
 
         try:
-            # Fetch 1h klines for ATR/ADX calculation (need ~50 candles)
+            # Fetch 15m klines for ATR/ADX calculation (need ~50 candles)
             klines_raw = await self._binance_client.futures_klines(
                 symbol=symbol,
-                interval="1h",
-                limit=60,
+                interval="15m",
+                limit=100,
             )
 
             if len(klines_raw) < 30:
