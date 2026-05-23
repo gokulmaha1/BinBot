@@ -517,6 +517,7 @@ class BotService:
                                 entry_price=opp["signal"].entry_price,
                                 sl_distance=opp["signal"].sl_distance,
                                 side=opp["signal"].side,
+                                leverage=position_size.leverage,
                                 total_quantity=position_size.quantity,
                             )
 

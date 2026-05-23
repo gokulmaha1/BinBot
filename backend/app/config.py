@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     MAX_ACTIVE_POSITIONS: int = 1            # 1 trade at a time
     MAX_CORRELATED_POSITIONS: int = 1
     CORRELATION_THRESHOLD: float = 0.90
-    MAX_LEVERAGE: int = 40                   # 40x leverage
+    MAX_LEVERAGE: int = 20                   # 20x leverage
     MAX_TRADES_PER_DAY: int = 30             # Allow many small trades
     CAPITAL_PER_TRADE_PCT: float = 0.50      # 50% of wallet = $10 margin
 
@@ -77,15 +77,15 @@ class Settings(BaseSettings):
     SCANNER_MAX_SPREAD_PCT: float = 0.001           # 0.1%
     SCANNER_MIN_LISTING_DAYS: int = 30
     SCANNER_TOP_PAIRS: int = 20
-    SCANNER_MANUAL_PAIRS: str = "BEATUSDT"   # Focus on BEATUSDT only
+    SCANNER_MANUAL_PAIRS: str = ""   # Empty allows AI to choose the coin
 
-    # ── Take Profit Tiers ($1 profit / $2 stop loss) ─────────────
-    # With $10 margin × 40x = $400 position:
-    #   $1 profit = 0.25% move → TP1 at 0.5R (SL=$2, TP=$1)
-    #   Close 100% at TP1 for quick $1 profit, then re-enter
-    TP1_RATIO: float = 0.5    # 0.5:1 R:R → $1 profit vs $2 risk
-    TP1_CLOSE_PCT: float = 1.00   # Close 100% at TP1 — take the $1 and re-enter
-    TP2_RATIO: float = 1.0    # Not used (100% closed at TP1)
+    # ── Take Profit Tiers ────────────────────────────────────────
+    # TP_ROI_TARGET forces a fixed percentage return. E.g. 10.0 = 10% ROI.
+    TP_ROI_TARGET: Optional[float] = 10.0
+
+    TP1_RATIO: float = 0.5    # 0.5:1 R:R → $1 profit vs $2 risk (used if TP_ROI_TARGET is None)
+    TP1_CLOSE_PCT: float = 1.00   # Close 100% at TP1
+    TP2_RATIO: float = 1.0    # Not used
     TP2_CLOSE_PCT: float = 0.00   # N/A
     TP3_RATIO: float = 1.5    # Not used
     TP3_CLOSE_PCT: float = 0.00   # N/A

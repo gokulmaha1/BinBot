@@ -340,6 +340,7 @@ class RiskManager:
         entry_price: float,
         sl_distance: float,
         side: str,
+        leverage: int = 1,
         total_quantity: float = 1.0,
         price_precision: int = 2,
         qty_precision: int = 3,
@@ -355,9 +356,19 @@ class RiskManager:
         """
         direction = 1.0 if side == SignalSide.BUY.value or side == SignalSide.BUY else -1.0
 
-        tp1_price = round(entry_price + direction * sl_distance * settings.TP1_RATIO, price_precision)
-        tp2_price = round(entry_price + direction * sl_distance * settings.TP2_RATIO, price_precision)
-        tp3_price = round(entry_price + direction * sl_distance * settings.TP3_RATIO, price_precision)
+        if getattr(settings, "TP_ROI_TARGET", None):
+            # Calculate TP distance required to hit the exact ROI %
+            # ROI = (price_change / entry) * leverage * 100
+            # price_change = (ROI / 100) / leverage * entry
+            required_price_move = (settings.TP_ROI_TARGET / 100.0) / leverage * entry_price
+            tp1_price = round(entry_price + direction * required_price_move, price_precision)
+            tp2_price = tp1_price
+            tp3_price = tp1_price
+            logger.info("Using Fixed ROI Target: %.2f%%. Calculated TP=%f", settings.TP_ROI_TARGET, tp1_price)
+        else:
+            tp1_price = round(entry_price + direction * sl_distance * settings.TP1_RATIO, price_precision)
+            tp2_price = round(entry_price + direction * sl_distance * settings.TP2_RATIO, price_precision)
+            tp3_price = round(entry_price + direction * sl_distance * settings.TP3_RATIO, price_precision)
 
         tp1_qty = round(total_quantity * settings.TP1_CLOSE_PCT, qty_precision)
         tp2_qty = round(total_quantity * settings.TP2_CLOSE_PCT, qty_precision)
