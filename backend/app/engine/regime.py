@@ -136,10 +136,10 @@ class RegimeDetector:
 
     def _check_trending_bullish(self, f: FeatureSet) -> float:
         """
-        TRENDING_BULLISH: EMA9 > EMA21 > EMA50 > EMA200, ADX > 25.
+        TRENDING_BULLISH: EMA9 > EMA21 > EMA50 > EMA200, ADX > 25, price > EMAs.
         """
         score = 0.0
-        total = 5
+        total = 6
 
         # EMA stack alignment
         if f.ema_fast > f.ema_mid:
@@ -148,6 +148,12 @@ class RegimeDetector:
             score += 1
         if f.ema_slow > f.ema_trend:
             score += 1
+
+        # Price Action relative to EMAs (prevent lagging false positives)
+        if f.close > f.ema_fast:
+            score += 1
+        elif f.close > f.ema_mid:
+            score += 0.5
 
         # ADX strength
         if f.adx > ADX_TRENDING:
@@ -165,10 +171,10 @@ class RegimeDetector:
 
     def _check_trending_bearish(self, f: FeatureSet) -> float:
         """
-        TRENDING_BEARISH: EMA9 < EMA21 < EMA50 < EMA200, ADX > 25.
+        TRENDING_BEARISH: EMA9 < EMA21 < EMA50 < EMA200, ADX > 25, price < EMAs.
         """
         score = 0.0
-        total = 5
+        total = 6
 
         if f.ema_fast < f.ema_mid:
             score += 1
@@ -176,6 +182,12 @@ class RegimeDetector:
             score += 1
         if f.ema_slow < f.ema_trend:
             score += 1
+
+        # Price Action relative to EMAs (prevent lagging false positives)
+        if f.close < f.ema_fast:
+            score += 1
+        elif f.close < f.ema_mid:
+            score += 0.5
 
         if f.adx > ADX_TRENDING:
             score += 1

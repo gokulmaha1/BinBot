@@ -153,12 +153,12 @@ class StrategyEngine:
         VWAP alignment, and volume.
         """
         score = 0.0
-        total = 6
+        total = 7
         side: str | None = None
 
         # ── Bullish setup ────────────────────────────────────────
-        bull_ema = f.ema_fast > f.ema_mid > f.ema_slow
-        bear_ema = f.ema_fast < f.ema_mid < f.ema_slow
+        bull_ema = f.ema_fast > f.ema_mid > f.ema_slow and f.close > f.ema_mid
+        bear_ema = f.ema_fast < f.ema_mid < f.ema_slow and f.close < f.ema_mid
 
         if bull_ema:
             side = "BUY"
@@ -180,6 +180,10 @@ class StrategyEngine:
             if f.supertrend_direction == 1:
                 score += 1.0
 
+            # MACD confirmation
+            if f.macd_histogram > 0:
+                score += 1.0
+
         elif bear_ema:
             side = "SELL"
             score += 2.0
@@ -191,6 +195,8 @@ class StrategyEngine:
             if f.volume_spike_ratio >= VOLUME_CONFIRM_RATIO:
                 score += 1.0
             if f.supertrend_direction == -1:
+                score += 1.0
+            if f.macd_histogram < 0:
                 score += 1.0
         else:
             return None
