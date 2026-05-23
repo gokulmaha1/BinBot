@@ -159,6 +159,64 @@ async function loadLogs() {
     }
 }
 
+// Load Risk Config
+async function loadRiskConfig() {
+    try {
+        const res = await apiFetch('/api/config');
+        if (!res || !res.ok) return;
+        
+        const data = await res.json();
+        const marginEl = document.getElementById('cfg-margin');
+        const leverageEl = document.getElementById('cfg-leverage');
+        const tpEl = document.getElementById('cfg-tp');
+        const slEl = document.getElementById('cfg-sl');
+        
+        if (marginEl) marginEl.value = Math.round(data.capital_per_trade_pct * 100);
+        if (leverageEl) leverageEl.value = data.max_leverage;
+        if (tpEl) tpEl.value = data.tp1_ratio;
+        if (slEl) slEl.value = Math.round(data.max_risk_per_trade * 100);
+    } catch (e) {
+        console.error("Error loading risk config:", e);
+    }
+}
+
+// Save Risk Config
+async function saveRiskConfig(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-save-config');
+    btn.disabled = true;
+    btn.innerText = 'Saving...';
+    
+    const margin = parseInt(document.getElementById('cfg-margin').value) / 100;
+    const leverage = parseInt(document.getElementById('cfg-leverage').value);
+    const tp = parseFloat(document.getElementById('cfg-tp').value);
+    const sl = parseInt(document.getElementById('cfg-sl').value) / 100;
+    
+    try {
+        const res = await apiFetch('/api/config', {
+            method: 'PUT',
+            body: JSON.stringify({
+                capital_per_trade_pct: margin,
+                max_leverage: leverage,
+                tp1_ratio: tp,
+                max_risk_per_trade: sl
+            })
+        });
+        
+        if (res && res.ok) {
+            showToast('Risk configuration saved and applied!', 'success');
+        } else {
+            const err = await res.json();
+            showToast(`Save failed: ${err.detail || 'unknown error'}`, 'error');
+        }
+    } catch (err) {
+        console.error("Error saving risk config:", err);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = '💾 Save Configuration';
+    }
+}
+
 // Bind button clicks and Socket events
 function initAIPage() {
     updateBotStatusUI();
@@ -169,11 +227,16 @@ function initAIPage() {
     const pauseBtn = document.getElementById('btn-pause-bot');
     const stopBtn = document.getElementById('btn-stop-bot');
     const resetBtn = document.getElementById('btn-reset-daily');
+    const configForm = document.getElementById('risk-config-form');
     
     if (startBtn) startBtn.onclick = startBotEngine;
     if (pauseBtn) pauseBtn.onclick = pauseBotEngine;
     if (stopBtn) stopBtn.onclick = stopBotEngine;
     if (resetBtn) resetBtn.onclick = resetDailyCounters;
+    if (configForm) configForm.onsubmit = saveRiskConfig;
+    
+    // Load config on startup
+    loadRiskConfig();
     
     // Socket hooks
     if (socket) {

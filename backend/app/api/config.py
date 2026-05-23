@@ -61,6 +61,8 @@ class BotConfigResponse(BaseModel):
 
 class UpdateConfigRequest(BaseModel):
     capital_per_trade_pct: Optional[float] = None
+    max_leverage: Optional[int] = None
+    max_risk_per_trade: Optional[float] = None
     trading_mode: Optional[str] = None
     tp1_ratio: Optional[float] = None
     tp1_close_pct: Optional[float] = None
@@ -128,11 +130,25 @@ async def update_config(
     """Update configurable bot settings. Risk limits are NOT modifiable."""
     updates = {}
     if req.capital_per_trade_pct is not None:
-        if 0.01 <= req.capital_per_trade_pct <= 0.50:
+        if 0.01 <= req.capital_per_trade_pct <= 1.00:
             settings.CAPITAL_PER_TRADE_PCT = req.capital_per_trade_pct
             updates["capital_per_trade_pct"] = req.capital_per_trade_pct
         else:
-            raise HTTPException(400, "capital_per_trade_pct must be between 0.01 and 0.50")
+            raise HTTPException(400, "capital_per_trade_pct must be between 0.01 and 1.00")
+
+    if req.max_leverage is not None:
+        if 1 <= req.max_leverage <= 125:
+            settings.MAX_LEVERAGE = req.max_leverage
+            updates["max_leverage"] = req.max_leverage
+        else:
+            raise HTTPException(400, "max_leverage must be between 1 and 125")
+
+    if req.max_risk_per_trade is not None:
+        if 0.01 <= req.max_risk_per_trade <= 1.00:
+            settings.MAX_RISK_PER_TRADE = req.max_risk_per_trade
+            updates["max_risk_per_trade"] = req.max_risk_per_trade
+        else:
+            raise HTTPException(400, "max_risk_per_trade must be between 0.01 and 1.00")
 
     if req.scanner_min_volume_24h is not None:
         settings.SCANNER_MIN_VOLUME_24H = req.scanner_min_volume_24h

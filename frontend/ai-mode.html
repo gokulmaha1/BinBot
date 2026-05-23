@@ -101,16 +101,10 @@
                         Toggle active scanning. The bot will automatically analyze charts, filter by market regimes, verify signals with XGBoost, enforce pre-trade risk checks, and execute trades on Binance Futures.
                     </p>
                     
-                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                        <button id="btn-start-bot" class="btn btn-success" style="width: 100%;">
-                            ⚡ Start AI Auto Mode
-                        </button>
-                        <button id="btn-pause-bot" class="btn btn-secondary" style="width: 100%;">
-                            ⏸️ Pause Engine (Monitor Only)
-                        </button>
-                        <button id="btn-stop-bot" class="btn btn-danger" style="width: 100%;">
-                            🛑 Stop AI Engine
-                        </button>
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                        <button id="btn-start-bot" class="btn btn-success" style="flex: 1; padding: 0.5rem;">⚡ Start</button>
+                        <button id="btn-pause-bot" class="btn btn-secondary" style="flex: 1; padding: 0.5rem;">⏸️ Pause</button>
+                        <button id="btn-stop-bot" class="btn btn-danger" style="flex: 1; padding: 0.5rem;">🛑 Stop</button>
                     </div>
 
                     <div class="card-divider"></div>
@@ -131,45 +125,27 @@
                     </button>
                 </div>
 
-                <!-- Hard Risk Limits Card -->
                 <div class="card">
-                    <div class="card-title">Hardwired Risk Limits</div>
-                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem;">
-                        These protection settings are hard-coded in the engine core and cannot be bypassed.
-                    </p>
-
-                    <div class="limit-row">
-                        <span>Max Active Positions</span>
-                        <span>3 Positions</span>
-                    </div>
-                    <div class="limit-row">
-                        <span>Risk Capital Per Trade</span>
-                        <span>1% Wallet Balance</span>
-                    </div>
-                    <div class="limit-row">
-                        <span>Max Leverage Limit</span>
-                        <span>5x Leverage</span>
-                    </div>
-                    <div class="limit-row">
-                        <span>Daily Loss Iron Shield</span>
-                        <span>3% of peak equity</span>
-                    </div>
-                    <div class="limit-row">
-                        <span>Maximum Drawdown Limit</span>
-                        <span>8% Peak to Trough</span>
-                    </div>
-                    <div class="limit-row">
-                        <span>Consecutive Loss Cooldown</span>
-                        <span>30 mins (on 3 losses)</span>
-                    </div>
-                    <div class="limit-row">
-                        <span>Min Strategy Score</span>
-                        <span>80 / 100</span>
-                    </div>
-                    <div class="limit-row">
-                        <span>Min ML Confidence</span>
-                        <span>75.0%</span>
-                    </div>
+                    <div class="card-title">Risk & Trade Configuration</div>
+                    <form id="risk-config-form" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div>
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Margin Allocation (% of Wallet)</label>
+                            <input type="number" id="cfg-margin" class="input-field" step="1" min="1" max="100" style="width: 100%;" placeholder="e.g. 50">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Leverage (x)</label>
+                            <input type="number" id="cfg-leverage" class="input-field" step="1" min="1" max="125" style="width: 100%;" placeholder="e.g. 40">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Take Profit (Reward:Risk Ratio)</label>
+                            <input type="number" id="cfg-tp" class="input-field" step="0.1" min="0.1" max="10" style="width: 100%;" placeholder="e.g. 0.5">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Stop Loss Risk (% of Wallet)</label>
+                            <input type="number" id="cfg-sl" class="input-field" step="1" min="1" max="100" style="width: 100%;" placeholder="e.g. 10">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="btn-save-config">💾 Save Configuration</button>
+                    </form>
                 </div>
             </div>
 

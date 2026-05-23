@@ -72,6 +72,10 @@ async def _restore_config_from_redis():
 
         if "capital_per_trade_pct" in saved:
             settings.CAPITAL_PER_TRADE_PCT = saved["capital_per_trade_pct"]
+        if "max_leverage" in saved:
+            settings.MAX_LEVERAGE = saved["max_leverage"]
+        if "max_risk_per_trade" in saved:
+            settings.MAX_RISK_PER_TRADE = saved["max_risk_per_trade"]
         if "trading_mode" in saved:
             try:
                 settings.TRADING_MODE = TradingMode(saved["trading_mode"])
