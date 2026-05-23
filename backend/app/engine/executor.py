@@ -286,6 +286,10 @@ class TradeExecutor:
 
             # SL
             sl_order = await self._place_sl_order(symbol, exit_side, sl_price)
+            if not sl_order:
+                logger.error("FATAL: Stop Loss order failed to place for %s. Executing emergency market close to prevent liquidation!", symbol)
+                await self.close_position(symbol, quantity, "emergency_sl_failure")
+                return TradeResult(success=False, error="Stop Loss order rejected or failed. Position emergency closed.")
 
             # ── 5. Record in DB ──────────────────────────────────
             trade_id = await self._record_trade(

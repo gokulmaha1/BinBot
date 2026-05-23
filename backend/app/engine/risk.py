@@ -242,6 +242,12 @@ class RiskManager:
                          reason, equity, entry_price, sl_distance)
             return PositionSize(quantity=0.0, leverage=1, risk_amount=0.0, risk_pct=0.0)
 
+        # Enforce a minimum Stop Loss percentage (0.5%) to prevent massive quantities from micro-ATRs
+        min_sl_distance = entry_price * 0.005
+        if sl_distance < min_sl_distance:
+            logger.info("SL distance %.6f too tight, widening to minimum %.6f (0.5%%)", sl_distance, min_sl_distance)
+            sl_distance = min_sl_distance
+
         # Risk amount: % of equity
         risk_amount = equity * settings.MAX_RISK_PER_TRADE
 
@@ -251,8 +257,15 @@ class RiskManager:
         # Notional value check
         notional_value = quantity * entry_price
 
-        # Use target leverage (MAX_LEVERAGE) to calculate required margin
-        target_leverage = settings.MAX_LEVERAGE
+        # Calculate safe leverage limit: liquidation MUST be further away than SL
+        # Liquidation roughly happens at 1 / leverage. So max leverage is ~1 / sl_pct. 
+        # We multiply by 0.8 to leave a 20% safety buffer for maintenance margin.
+        sl_pct = sl_distance / entry_price
+        safe_leverage_limit = max(1, int((1.0 / sl_pct) * 0.8))
+        
+        # Use target leverage (MAX_LEVERAGE) but cap it at safe_leverage_limit
+        target_leverage = min(settings.MAX_LEVERAGE, safe_leverage_limit)
+        
         max_capital = equity * settings.CAPITAL_PER_TRADE_PCT
         required_margin = notional_value / target_leverage if target_leverage > 0 else notional_value
 
