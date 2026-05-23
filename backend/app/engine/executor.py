@@ -269,69 +269,74 @@ class TradeExecutor:
                 logger.info("Recalibrated SL/TP by %+f due to slippage (Filled: %f)", price_shift, entry_price)
 
             # ── 4. Protection orders (TP + SL) ───────────────────
-            exit_side = "SELL" if side in ("BUY", SignalSide.BUY) else "BUY"
-            tp_orders: list[OrderResult] = []
+            try:
+                exit_side = "SELL" if side in ("BUY", SignalSide.BUY) else "BUY"
+                tp_orders: list[OrderResult] = []
 
-            # TP1
-            tp1_order = await self._place_tp_order(
-                symbol, exit_side, tp_levels.tp1.quantity, tp_levels.tp1.price, "TP1"
-            )
-            if tp1_order:
-                tp_orders.append(tp1_order)
+                # TP1
+                tp1_order = await self._place_tp_order(
+                    symbol, exit_side, tp_levels.tp1.quantity, tp_levels.tp1.price, "TP1"
+                )
+                if tp1_order:
+                    tp_orders.append(tp1_order)
 
-            # TP2
-            tp2_order = await self._place_tp_order(
-                symbol, exit_side, tp_levels.tp2.quantity, tp_levels.tp2.price, "TP2"
-            )
-            if tp2_order:
-                tp_orders.append(tp2_order)
+                # TP2
+                tp2_order = await self._place_tp_order(
+                    symbol, exit_side, tp_levels.tp2.quantity, tp_levels.tp2.price, "TP2"
+                )
+                if tp2_order:
+                    tp_orders.append(tp2_order)
 
-            # TP3
-            tp3_order = await self._place_tp_order(
-                symbol, exit_side, tp_levels.tp3.quantity, tp_levels.tp3.price, "TP3"
-            )
-            if tp3_order:
-                tp_orders.append(tp3_order)
+                # TP3
+                tp3_order = await self._place_tp_order(
+                    symbol, exit_side, tp_levels.tp3.quantity, tp_levels.tp3.price, "TP3"
+                )
+                if tp3_order:
+                    tp_orders.append(tp3_order)
 
-            # SL
-            sl_order = await self._place_sl_order(symbol, exit_side, sl_price)
-            if not sl_order:
-                err_msg = f"Stop Loss order rejected or failed. {self._last_order_error}"
-                logger.error("FATAL: Stop Loss order failed to place for %s. Executing emergency market close to prevent liquidation! Error: %s", symbol, self._last_order_error)
-                await self.close_position(symbol, quantity, "emergency_sl_failure")
-                return TradeResult(success=False, error=err_msg)
+                # SL
+                sl_order = await self._place_sl_order(symbol, exit_side, sl_price)
+                if not sl_order:
+                    err_msg = f"Stop Loss order rejected or failed. {self._last_order_error}"
+                    logger.error("FATAL: Stop Loss order failed to place for %s. Executing emergency market close to prevent liquidation! Error: %s", symbol, self._last_order_error)
+                    await self.close_position(symbol, quantity, "emergency_sl_failure")
+                    return TradeResult(success=False, error=err_msg)
 
-            # ── 5. Record in DB ──────────────────────────────────
-            trade_id = await self._record_trade(
-                bot_id=bot_id,
-                signal=signal,
-                symbol=symbol,
-                side=side,
-                strategy_name=strategy_name,
-                leverage=leverage,
-                entry_price=entry_price,
-                quantity=quantity,
-                sl_price=sl_price,
-                tp_levels=tp_levels,
-                entry_order=entry_order,
-                slippage=slippage,
-            )
+                # ── 5. Record in DB ──────────────────────────────────
+                trade_id = await self._record_trade(
+                    bot_id=bot_id,
+                    signal=signal,
+                    symbol=symbol,
+                    side=side,
+                    strategy_name=strategy_name,
+                    leverage=leverage,
+                    entry_price=entry_price,
+                    quantity=quantity,
+                    sl_price=sl_price,
+                    tp_levels=tp_levels,
+                    entry_order=entry_order,
+                    slippage=slippage,
+                )
 
-            result = TradeResult(
-                success=True,
-                trade_id=trade_id,
-                entry_price=entry_price,
-                entry_order=entry_order,
-                tp_orders=tp_orders,
-                sl_order=sl_order,
-                slippage=round(slippage, 6),
-            )
+                result = TradeResult(
+                    success=True,
+                    trade_id=trade_id,
+                    entry_price=entry_price,
+                    entry_order=entry_order,
+                    tp_orders=tp_orders,
+                    sl_order=sl_order,
+                    slippage=round(slippage, 6),
+                )
 
-            logger.info(
-                "Trade executed: %s %s %s @ %.4f | SL=%.4f | slippage=%.4f%%",
-                side, quantity, symbol, entry_price, sl_price, slippage * 100,
-            )
-            return result
+                logger.info(
+                    "Trade executed: %s %s %s @ %.4f | SL=%.4f | slippage=%.4f%%",
+                    side, quantity, symbol, entry_price, sl_price, slippage * 100,
+                )
+                return result
+            except Exception as e:
+                logger.error("FATAL: Unexpected error during protection order placement: %s. Executing emergency close!", e)
+                await self.close_position(symbol, quantity, "emergency_unexpected_error")
+                raise e
 
         except Exception as exc:
             logger.error("Trade execution failed: %s", exc, exc_info=True)

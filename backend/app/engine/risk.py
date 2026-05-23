@@ -49,7 +49,7 @@ class PositionSize:
     notional_value: float = 0.0
 
 
-@dataclass(frozen=True)
+@dataclass
 class TPLevel:
     """Single take-profit level."""
     price: float
@@ -58,7 +58,7 @@ class TPLevel:
     rr_ratio: float
 
 
-@dataclass(frozen=True)
+@dataclass
 class TPLevels:
     """All three TP tiers."""
     tp1: TPLevel
