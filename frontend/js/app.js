@@ -11,6 +11,11 @@ const REFRESH_KEY = 'binbot_refresh_token';
 async function apiFetch(url, options = {}) {
     options.headers = options.headers || {};
     
+    // Auto-set Content-Type if body is a string (JSON)
+    if (typeof options.body === 'string' && !options.headers['Content-Type']) {
+        options.headers['Content-Type'] = 'application/json';
+    }
+    
     // Attach Access Token if exists
     const accessToken = localStorage.getItem(TOKEN_KEY);
     if (accessToken) {
