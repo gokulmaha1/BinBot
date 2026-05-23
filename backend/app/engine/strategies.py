@@ -153,56 +153,59 @@ class StrategyEngine:
         VWAP alignment, and volume.
         """
         score = 0.0
-        total = 7
+        total = 8 # Increased total required confluence factors
         side: str | None = None
 
         # ── Bullish setup ────────────────────────────────────────
-        bull_ema = f.ema_fast > f.ema_mid > f.ema_slow and f.close > f.ema_mid
-        bear_ema = f.ema_fast < f.ema_mid < f.ema_slow and f.close < f.ema_mid
+        bull_ema = (
+            f.close > f.ema_fast > f.ema_mid > f.ema_slow > f.ema_trend
+        )
+        bear_ema = (
+            f.close < f.ema_fast < f.ema_mid < f.ema_slow < f.ema_trend
+        )
+
+        # Require minimum trend strength
+        if f.adx < 25.0:
+            return None
 
         if bull_ema:
             side = "BUY"
-            score += 2.0
+            score += 3.0
 
             # RSI confirmation: not overbought, > 40
-            if RSI_BULL_MIN <= f.rsi <= RSI_BULL_MAX:
+            if 50 <= f.rsi <= 70:
                 score += 1.0
 
             # VWAP: price above VWAP in uptrend
             if f.close > f.vwap:
                 score += 1.0
 
-            # Volume confirmation
-            if f.volume_spike_ratio >= VOLUME_CONFIRM_RATIO:
-                score += 1.0
-
             # Supertrend confirmation
             if f.supertrend_direction == 1:
                 score += 1.0
 
-            # MACD confirmation
-            if f.macd_histogram > 0:
-                score += 1.0
+            # MACD confirmation (Strong momentum)
+            if f.macd_histogram > 0 and f.macd_line > f.macd_signal:
+                score += 2.0
 
         elif bear_ema:
             side = "SELL"
-            score += 2.0
+            score += 3.0
 
-            if RSI_BEAR_MIN <= f.rsi <= RSI_BEAR_MAX:
+            if 30 <= f.rsi <= 50:
                 score += 1.0
             if f.close < f.vwap:
                 score += 1.0
-            if f.volume_spike_ratio >= VOLUME_CONFIRM_RATIO:
-                score += 1.0
             if f.supertrend_direction == -1:
                 score += 1.0
-            if f.macd_histogram < 0:
-                score += 1.0
+            if f.macd_histogram < 0 and f.macd_line < f.macd_signal:
+                score += 2.0
         else:
             return None
 
+        # SNIPER MODE: Require perfect 8/8 score to execute a trade
         confidence = score / total
-        if confidence < 0.4:
+        if confidence < 1.0:
             return None
 
         sl_dist = f.atr * SL_ATR_MULTIPLIER

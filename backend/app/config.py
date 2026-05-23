@@ -68,8 +68,8 @@ class Settings(BaseSettings):
     CAPITAL_PER_TRADE_PCT: float = 0.50      # 50% of wallet = $10 margin
 
     # ── Signal Thresholds ────────────────────────────────────────
-    SIGNAL_SCORE_THRESHOLD: int = 40         # Accept more signals for frequent trading
-    ML_CONFIDENCE_THRESHOLD: float = 0.50    # Lower ML gate for more trades
+    SIGNAL_SCORE_THRESHOLD: int = 70         # Require strong technical confluence
+    ML_CONFIDENCE_THRESHOLD: float = 0.65    # Require >65% ML confidence
 
     # ── Scanner Settings ─────────────────────────────────────────
     SCANNER_INTERVAL_SECONDS: int = 10       # Scan every 10s
