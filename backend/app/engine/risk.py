@@ -200,23 +200,11 @@ class RiskManager:
                     reason=f"Revenge trade blocked: {symbol} was closed at a loss recently",
                 )
 
-            # ── 8. Averaging-down / martingale block ─────────────
-            has_open = await self._has_open_position(bot_id, symbol)
-            if has_open:
-                return RiskCheckResult(
-                    allowed=False,
-                    reason=f"Averaging down blocked: already have an open position on {symbol}",
-                )
+            return RiskCheckResult(allowed=True, reason="All checks passed", warnings=warnings)
 
-            return RiskCheckResult(allowed=True, reason="All risk checks passed", warnings=warnings)
-
-        except Exception as exc:
-            logger.error("Risk check failed: %s", exc, exc_info=True)
-            return RiskCheckResult(allowed=False, reason=f"Risk check error: {exc}")
-
-    # ─────────────────────────────────────────────────────────────
-    #  POSITION SIZING
-    # ─────────────────────────────────────────────────────────────
+        except Exception as e:
+            logger.error("Risk check failed: %s", e)
+            return RiskCheckResult(allowed=False, reason=f"Risk engine error: {str(e)}")
 
     def calculate_position_size(
         self,
@@ -227,35 +215,19 @@ class RiskManager:
         qty_precision: int = 3,
     ) -> PositionSize:
         """
-        Calculate position size based on 1% risk per trade.
-
-        ``sl_distance`` is the absolute price distance to the stop-loss
-        (always positive).
+        Calculate position size using exactly 100% of the allocated equity as margin.
+        If the bot is configured to use 50% of the wallet, `equity` passed here is exactly that 50%.
         """
         if sl_distance <= 0 or entry_price <= 0 or equity <= 0:
-            reason = (
-                "equity<=0" if equity <= 0 else
-                "entry_price<=0" if entry_price <= 0 else
-                "sl_distance<=0"
-            )
-            logger.error("Invalid inputs for position sizing: %s equity=%.2f entry=%.6f sl_dist=%.6f",
-                         reason, equity, entry_price, sl_distance)
             return PositionSize(quantity=0.0, leverage=1, risk_amount=0.0, risk_pct=0.0)
 
         # Enforce a minimum Stop Loss percentage (0.5%) to prevent massive quantities from micro-ATRs
         min_sl_distance = entry_price * 0.005
         if sl_distance < min_sl_distance:
-            logger.info("SL distance %.6f too tight, widening to minimum %.6f (0.5%%)", sl_distance, min_sl_distance)
             sl_distance = min_sl_distance
 
-        # Risk amount: % of equity
-        risk_amount = equity * settings.MAX_RISK_PER_TRADE
-
-        # Raw quantity from risk
-        quantity = risk_amount / sl_distance
-
-        # Notional value check
-        notional_value = quantity * entry_price
+        # The user requested to strictly use the allocated capital as fixed margin.
+        target_margin = equity
 
         # Calculate safe leverage limit: liquidation MUST be further away than SL
         # Liquidation roughly happens at 1 / leverage. So max leverage is ~1 / sl_pct. 
@@ -265,21 +237,15 @@ class RiskManager:
         
         # Use target leverage (MAX_LEVERAGE) but cap it at safe_leverage_limit
         target_leverage = min(settings.MAX_LEVERAGE, safe_leverage_limit)
-        
-        max_capital = equity * settings.CAPITAL_PER_TRADE_PCT
-        required_margin = notional_value / target_leverage if target_leverage > 0 else notional_value
 
-        # If required margin exceeds allocated capital, reduce position size
-        if required_margin > max_capital:
-            scale = max_capital / required_margin
-            quantity *= scale
-            notional_value = quantity * entry_price
-            required_margin = notional_value / target_leverage
-            actual_risk = (quantity * sl_distance) / equity
-            logger.warning(
-                "Position size reduced: margin $%.2f > cap $%.2f. Risk: %.2f%%",
-                required_margin, max_capital, actual_risk * 100,
-            )
+        notional_value = target_margin * target_leverage
+        quantity = notional_value / entry_price
+        actual_risk = (quantity * sl_distance) / equity
+
+        logger.info(
+            "Target Margin: $%.2f | Lev: %d | Notional: $%.2f | Qty: %.4f | Risk: %.2f%%",
+            target_margin, target_leverage, notional_value, quantity, actual_risk * 100
+        )
 
         leverage = target_leverage
 
@@ -291,27 +257,24 @@ class RiskManager:
             fallback_quantity = target_notional / entry_price
             fallback_margin = target_notional / target_leverage
 
-            if fallback_margin <= max_capital and fallback_quantity > 0:
+            if fallback_margin <= target_margin and fallback_quantity > 0:
                 quantity = fallback_quantity
                 notional_value = target_notional
-                required_margin = fallback_margin
-                logger.warning(
-                    "Small-account fallback for %s: sized to $%.0f notional (margin=$%.2f cap=$%.2f)",
-                    symbol, target_notional, fallback_margin, max_capital,
-                )
+                target_margin = fallback_margin
             else:
                 logger.warning(
                     "Notional $%.2f below minimum $%.0f for %s — "
                     "equity=%.2f entry=%.6f sl_dist=%.6f qty=%.4f margin_needed=%.2f cap=%.2f",
                     notional_value, MIN_NOTIONAL, symbol,
                     equity, entry_price, sl_distance, quantity,
-                    fallback_margin, max_capital,
+                    fallback_margin, target_margin,
                 )
                 return PositionSize(quantity=0.0, leverage=1, risk_amount=0.0, risk_pct=0.0)
 
         # Apply Binance precision
         quantity = round(quantity, qty_precision)
         risk_pct = (quantity * sl_distance) / equity if equity > 0 else 0.0
+        risk_amount = equity * risk_pct
 
         result = PositionSize(
             quantity=quantity,
