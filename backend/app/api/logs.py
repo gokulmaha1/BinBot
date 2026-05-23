@@ -61,7 +61,7 @@ async def list_logs(
             level=l.level.value,
             source=l.source.value,
             message=l.message,
-            timestamp=l.created_at.isoformat(),
+            timestamp=l.created_at.isoformat() + "Z",
         )
         for l in logs
     ]
