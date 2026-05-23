@@ -16,8 +16,11 @@ def risk_manager(mock_db):
     return RiskManager(db_session=mock_db, redis=None)
 
 def test_calculate_position_size(risk_manager):
-    # Test typical scenario
+    # Explicitly set config values used by this test
     settings.MAX_LEVERAGE = 5
+    settings.MAX_RISK_PER_TRADE = 0.01
+    settings.CAPITAL_PER_TRADE_PCT = 0.20
+
     equity = 10000.0
     entry_price = 100.0
     sl_distance = 2.0  # 2% stop distance
@@ -38,13 +41,16 @@ def test_calculate_position_size(risk_manager):
     )
     
     assert pos_size.quantity == 50.0
-    assert pos_size.leverage == 3
+    assert pos_size.leverage == 5  # Uses MAX_LEVERAGE directly
     assert pos_size.risk_amount == 100.0
     assert pos_size.risk_pct == 0.01
 
 def test_calculate_position_size_leverage_cap(risk_manager):
-    # Test leverage cap reduction
+    # Explicitly set config values used by this test
     settings.MAX_LEVERAGE = 5
+    settings.MAX_RISK_PER_TRADE = 0.01
+    settings.CAPITAL_PER_TRADE_PCT = 0.20
+
     equity = 10000.0
     entry_price = 100.0
     sl_distance = 0.5  # tight stop: 0.5% stop distance
@@ -71,6 +77,14 @@ def test_calculate_position_size_leverage_cap(risk_manager):
     assert pos_size.risk_pct == 0.005  # risk reduced to 0.5%
 
 def test_calculate_tp_levels(risk_manager):
+    # Explicitly set TP config values
+    settings.TP1_RATIO = 1.0
+    settings.TP1_CLOSE_PCT = 0.40
+    settings.TP2_RATIO = 2.0
+    settings.TP2_CLOSE_PCT = 0.30
+    settings.TP3_RATIO = 3.0
+    settings.TP3_CLOSE_PCT = 0.30
+
     tp_levels = risk_manager.calculate_tp_levels(
         entry_price=100.0,
         sl_distance=2.0,
@@ -93,6 +107,9 @@ def test_calculate_tp_levels(risk_manager):
 
 @pytest.mark.asyncio
 async def test_check_trade_allowed_max_positions(risk_manager, mock_db):
+    # Use default MAX_ACTIVE_POSITIONS from settings
+    settings.MAX_ACTIVE_POSITIONS = 3
+
     bot_id = uuid4()
     bot = Bot(
         id=bot_id,
@@ -105,10 +122,7 @@ async def test_check_trade_allowed_max_positions(risk_manager, mock_db):
         last_reset_date=datetime.utcnow().date()
     )
     
-    # Mock bot retrieval
     risk_manager._get_bot = AsyncMock(return_value=bot)
-    
-    # Mock active positions count to 3 (which is settings.MAX_ACTIVE_POSITIONS)
     risk_manager._count_active_positions = AsyncMock(return_value=3)
     
     res = await risk_manager.check_trade_allowed(bot_id, "BTCUSDT", "BUY", {})
@@ -117,6 +131,10 @@ async def test_check_trade_allowed_max_positions(risk_manager, mock_db):
 
 @pytest.mark.asyncio
 async def test_check_trade_allowed_daily_loss_limit(risk_manager, mock_db):
+    # Set config to ensure max positions doesn't block first
+    settings.MAX_ACTIVE_POSITIONS = 3
+    settings.MAX_DAILY_LOSS = 0.03  # 3%
+
     bot_id = uuid4()
     bot = Bot(
         id=bot_id,
@@ -130,7 +148,7 @@ async def test_check_trade_allowed_daily_loss_limit(risk_manager, mock_db):
     )
     
     risk_manager._get_bot = AsyncMock(return_value=bot)
-    risk_manager._count_active_positions = AsyncMock(return_value=1)
+    risk_manager._count_active_positions = AsyncMock(return_value=0)
     
     res = await risk_manager.check_trade_allowed(bot_id, "BTCUSDT", "BUY", {})
     assert res.allowed is False
@@ -138,6 +156,8 @@ async def test_check_trade_allowed_daily_loss_limit(risk_manager, mock_db):
 
 @pytest.mark.asyncio
 async def test_check_trade_allowed_cooldown(risk_manager, mock_db):
+    settings.MAX_ACTIVE_POSITIONS = 3
+
     bot_id = uuid4()
     bot = Bot(
         id=bot_id,
@@ -159,6 +179,8 @@ async def test_check_trade_allowed_cooldown(risk_manager, mock_db):
 
 @pytest.mark.asyncio
 async def test_check_trade_allowed_revenge_trading(risk_manager, mock_db):
+    settings.MAX_ACTIVE_POSITIONS = 3
+
     bot_id = uuid4()
     bot = Bot(
         id=bot_id,
@@ -172,7 +194,7 @@ async def test_check_trade_allowed_revenge_trading(risk_manager, mock_db):
     )
     
     with patch.object(risk_manager, '_get_bot', return_value=bot):
-        risk_manager._count_active_positions = AsyncMock(return_value=1)
+        risk_manager._count_active_positions = AsyncMock(return_value=0)
         risk_manager._get_open_symbols = AsyncMock(return_value=["ETHUSDT"])
         risk_manager.check_correlation = AsyncMock(return_value={"ETHUSDT": 0.3})
         risk_manager._check_revenge_trade = AsyncMock(return_value=True)  # revenge trade!
@@ -184,6 +206,8 @@ async def test_check_trade_allowed_revenge_trading(risk_manager, mock_db):
 
 @pytest.mark.asyncio
 async def test_check_trade_allowed_averaging_down(risk_manager, mock_db):
+    settings.MAX_ACTIVE_POSITIONS = 3
+
     bot_id = uuid4()
     bot = Bot(
         id=bot_id,
@@ -197,7 +221,7 @@ async def test_check_trade_allowed_averaging_down(risk_manager, mock_db):
     )
     
     with patch.object(risk_manager, '_get_bot', return_value=bot):
-        risk_manager._count_active_positions = AsyncMock(return_value=1)
+        risk_manager._count_active_positions = AsyncMock(return_value=0)
         risk_manager._get_open_symbols = AsyncMock(return_value=["BTCUSDT"])
         risk_manager.check_correlation = AsyncMock(return_value={})
         risk_manager._check_revenge_trade = AsyncMock(return_value=False)

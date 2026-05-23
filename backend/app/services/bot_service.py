@@ -324,14 +324,16 @@ class BotService:
                             # Step 3: Detect regime
                             regime = self._regime.detect(features)
                             ema_stack = (
-                                "BULL" if features.ema_fast > features.ema_mid > features.ema_slow > features.ema_trend else
-                                "BEAR" if features.ema_fast < features.ema_mid < features.ema_slow < features.ema_trend else
+                                "BULL" if features.ema_fast > features.ema_mid > features.ema_slow else
+                                "BEAR" if features.ema_fast < features.ema_mid < features.ema_slow else
                                 "MIXED"
                             )
+                            st_dir = "UP" if features.supertrend_direction == 1 else "DOWN"
                             await self._log_to_db(
                                 LogLevel.INFO, LogSource.DATA,
-                                f"📊 {symbol}: Regime={regime.regime} | RSI={features.rsi:.1f} | "
-                                f"ADX={features.adx:.1f} | EMA_stack={ema_stack}"
+                                f"📊 {symbol}: Price=${features.close:.4f} | Regime={regime.regime} | "
+                                f"RSI={features.rsi:.1f} | ADX={features.adx:.1f} | "
+                                f"EMA={ema_stack} | MACD={features.macd_histogram:.4f} | ST={st_dir}"
                             )
 
                             # Step 4: Run strategies

@@ -54,38 +54,41 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: Optional[str] = None
     TELEGRAM_CHAT_ID: Optional[str] = None
 
-    # ── Risk Management (HARDCODED LIMITS — NOT OVERRIDABLE) ────
-    MAX_RISK_PER_TRADE: float = 0.02         # 2% of equity (aggressive)
-    MAX_DAILY_LOSS: float = 0.05             # 5% of starting daily equity
-    MAX_DRAWDOWN: float = 0.10               # 10% from equity peak
-    MAX_CONSECUTIVE_LOSSES: int = 5          # Pause after 5 consecutive losses
-    CONSECUTIVE_LOSS_COOLDOWN: int = 600     # 10 minutes cooldown (aggressive)
-    MAX_ACTIVE_POSITIONS: int = 3
-    MAX_CORRELATED_POSITIONS: int = 2
+    # ── Risk Management ──────────────────────────────────────────
+    MAX_RISK_PER_TRADE: float = 0.10         # 10% of equity ($2 SL from $20)
+    MAX_DAILY_LOSS: float = 0.30             # 30% daily loss limit ($6 from $20)
+    MAX_DRAWDOWN: float = 0.40               # 40% max drawdown
+    MAX_CONSECUTIVE_LOSSES: int = 3          # Pause after 3 consecutive losses
+    CONSECUTIVE_LOSS_COOLDOWN: int = 900     # 15 minutes cooldown
+    MAX_ACTIVE_POSITIONS: int = 1            # 1 trade at a time
+    MAX_CORRELATED_POSITIONS: int = 1
     CORRELATION_THRESHOLD: float = 0.90
-    MAX_LEVERAGE: int = 20
-    MAX_TRADES_PER_DAY: int = 20
-    CAPITAL_PER_TRADE_PCT: float = 0.30      # 30% of wallet per trade (aggressive)
+    MAX_LEVERAGE: int = 40                   # 40x leverage
+    MAX_TRADES_PER_DAY: int = 30             # Allow many small trades
+    CAPITAL_PER_TRADE_PCT: float = 0.50      # 50% of wallet = $10 margin
 
     # ── Signal Thresholds ────────────────────────────────────────
-    SIGNAL_SCORE_THRESHOLD: int = 45         # Minimum signal score (aggressive)
-    ML_CONFIDENCE_THRESHOLD: float = 0.55    # Minimum ML confirmation (aggressive)
+    SIGNAL_SCORE_THRESHOLD: int = 40         # Accept more signals for frequent trading
+    ML_CONFIDENCE_THRESHOLD: float = 0.50    # Lower ML gate for more trades
 
     # ── Scanner Settings ─────────────────────────────────────────
-    SCANNER_INTERVAL_SECONDS: int = 10       # Scan every 10s (aggressive)
+    SCANNER_INTERVAL_SECONDS: int = 10       # Scan every 10s
     SCANNER_MIN_VOLUME_24H: float = 50_000_000.0   # $50M minimum
     SCANNER_MAX_SPREAD_PCT: float = 0.001           # 0.1%
     SCANNER_MIN_LISTING_DAYS: int = 30
     SCANNER_TOP_PAIRS: int = 20
-    SCANNER_MANUAL_PAIRS: str = ""
+    SCANNER_MANUAL_PAIRS: str = "BEATUSDT"   # Focus on BEATUSDT only
 
-    # ── Take Profit Tiers (Aggressive — quick small profits) ────
-    TP1_RATIO: float = 0.5    # 0.5:1 R:R — take quick profit
-    TP1_CLOSE_PCT: float = 0.50   # Close 50% at first target
-    TP2_RATIO: float = 1.0    # 1:1 R:R
-    TP2_CLOSE_PCT: float = 0.30   # Close 30%
-    TP3_RATIO: float = 1.5    # 1.5:1 R:R
-    TP3_CLOSE_PCT: float = 0.20   # Close remaining 20%
+    # ── Take Profit Tiers ($1 profit / $2 stop loss) ─────────────
+    # With $10 margin × 40x = $400 position:
+    #   $1 profit = 0.25% move → TP1 at 0.5R (SL=$2, TP=$1)
+    #   Close 100% at TP1 for quick $1 profit, then re-enter
+    TP1_RATIO: float = 0.5    # 0.5:1 R:R → $1 profit vs $2 risk
+    TP1_CLOSE_PCT: float = 1.00   # Close 100% at TP1 — take the $1 and re-enter
+    TP2_RATIO: float = 1.0    # Not used (100% closed at TP1)
+    TP2_CLOSE_PCT: float = 0.00   # N/A
+    TP3_RATIO: float = 1.5    # Not used
+    TP3_CLOSE_PCT: float = 0.00   # N/A
 
     # ── Technical Indicators ─────────────────────────────────────
     EMA_FAST: int = 9
