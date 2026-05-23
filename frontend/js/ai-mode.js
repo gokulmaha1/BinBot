@@ -181,8 +181,7 @@ async function loadRiskConfig() {
 }
 
 // Save Risk Config
-async function saveRiskConfig(e) {
-    e.preventDefault();
+async function saveRiskConfig() {
     const btn = document.getElementById('btn-save-config');
     btn.disabled = true;
     btn.innerText = 'Saving...';
@@ -227,13 +226,13 @@ function initAIPage() {
     const pauseBtn = document.getElementById('btn-pause-bot');
     const stopBtn = document.getElementById('btn-stop-bot');
     const resetBtn = document.getElementById('btn-reset-daily');
-    const configForm = document.getElementById('risk-config-form');
+    const saveConfigBtn = document.getElementById('btn-save-config');
     
     if (startBtn) startBtn.onclick = startBotEngine;
     if (pauseBtn) pauseBtn.onclick = pauseBotEngine;
     if (stopBtn) stopBtn.onclick = stopBotEngine;
     if (resetBtn) resetBtn.onclick = resetDailyCounters;
-    if (configForm) configForm.onsubmit = saveRiskConfig;
+    if (saveConfigBtn) saveConfigBtn.onclick = saveRiskConfig;
     
     // Load config on startup
     loadRiskConfig();
