@@ -256,8 +256,17 @@ class TradeExecutor:
                 entry_price = await self._get_entry_from_position(symbol) or 0.0
 
             # Slippage tracking
-            requested_price = entry_price or signal.price if hasattr(signal, "price") else entry_price
+            requested_price = signal.entry_price if hasattr(signal, "entry_price") else entry_price
             slippage = abs(entry_price - requested_price) / requested_price if requested_price > 0 else 0.0
+
+            # Recalibrate SL and TP relative to the actual fill price to prevent "would trigger immediately" errors
+            if requested_price > 0 and entry_price > 0:
+                price_shift = entry_price - requested_price
+                sl_price += price_shift
+                tp_levels.tp1.price += price_shift
+                tp_levels.tp2.price += price_shift
+                tp_levels.tp3.price += price_shift
+                logger.info("Recalibrated SL/TP by %+f due to slippage (Filled: %f)", price_shift, entry_price)
 
             # ── 4. Protection orders (TP + SL) ───────────────────
             exit_side = "SELL" if side in ("BUY", SignalSide.BUY) else "BUY"
@@ -287,9 +296,10 @@ class TradeExecutor:
             # SL
             sl_order = await self._place_sl_order(symbol, exit_side, sl_price)
             if not sl_order:
-                logger.error("FATAL: Stop Loss order failed to place for %s. Executing emergency market close to prevent liquidation!", symbol)
+                err_msg = f"Stop Loss order rejected or failed. {self._last_order_error}"
+                logger.error("FATAL: Stop Loss order failed to place for %s. Executing emergency market close to prevent liquidation! Error: %s", symbol, self._last_order_error)
                 await self.close_position(symbol, quantity, "emergency_sl_failure")
-                return TradeResult(success=False, error="Stop Loss order rejected or failed. Position emergency closed.")
+                return TradeResult(success=False, error=err_msg)
 
             # ── 5. Record in DB ──────────────────────────────────
             trade_id = await self._record_trade(
@@ -572,6 +582,7 @@ class TradeExecutor:
         await self._ensure_client()
         rounded_price = await self.round_price(symbol, stop_price)
 
+        last_error = ""
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 logger.info(
@@ -588,9 +599,11 @@ class TradeExecutor:
                 )
                 return self._parse_order(result)
             except Exception as exc:
+                last_error = str(exc)
                 logger.warning("SL order attempt %d failed: %s", attempt, exc)
                 if attempt < MAX_RETRIES:
                     await asyncio.sleep(RETRY_DELAY_SECONDS)
+        self._last_order_error = last_error
         return None
 
     # ─────────────────────────────────────────────────────────────
