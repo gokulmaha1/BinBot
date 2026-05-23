@@ -561,15 +561,21 @@ class TradeExecutor:
                     "[EXEC] Attempt %d: %s TAKE_PROFIT_MARKET %s qty=%s @ %s",
                     attempt, label, symbol, rounded_qty, rounded_price,
                 )
-                result = await self.client.futures_create_algo_order(
-                    algoType="CONDITIONAL",
-                    symbol=symbol,
-                    side=side,
-                    type="TAKE_PROFIT_MARKET",
-                    quantity=rounded_qty,
-                    triggerPrice=rounded_price,
-                    workingType=WORKING_TYPE,
-                    reduceOnly="true",
+                params = {
+                    "algoType": "CONDITIONAL",
+                    "symbol": symbol,
+                    "side": side,
+                    "type": "TAKE_PROFIT_MARKET",
+                    "quantity": rounded_qty,
+                    "triggerPrice": rounded_price,
+                    "workingType": WORKING_TYPE,
+                    "reduceOnly": "true",
+                }
+                result = await self.client._request_futures_api(
+                    'post',
+                    'algoOrder',
+                    signed=True,
+                    data=params
                 )
                 return self._parse_order(result)
             except Exception as exc:
@@ -595,14 +601,20 @@ class TradeExecutor:
                     "[EXEC] Attempt %d: STOP_MARKET %s @ %s (closePosition)",
                     attempt, symbol, rounded_price,
                 )
-                result = await self.client.futures_create_algo_order(
-                    algoType="CONDITIONAL",
-                    symbol=symbol,
-                    side=side,
-                    type="STOP_MARKET",
-                    triggerPrice=rounded_price,
-                    closePosition="true",
-                    workingType=WORKING_TYPE,
+                params = {
+                    "algoType": "CONDITIONAL",
+                    "symbol": symbol,
+                    "side": side,
+                    "type": "STOP_MARKET",
+                    "triggerPrice": rounded_price,
+                    "closePosition": "true",
+                    "workingType": WORKING_TYPE,
+                }
+                result = await self.client._request_futures_api(
+                    'post',
+                    'algoOrder',
+                    signed=True,
+                    data=params
                 )
                 return self._parse_order(result)
             except Exception as exc:
